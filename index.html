@@ -1615,7 +1615,7 @@
       renderField('location', record.location || '施設ご本人様居室', 'text');
       renderField('meetingDate', record.meetingDate, 'date');
       renderField('doctor', record.doctor || '', 'doctor_master'); 
-      renderField('meetingTime', record.meetingTime || '14:00 - 14:15', 'text');
+      renderField('meetingTime', record.meetingTime || '', 'text');
       renderField('attendees', record.attendees || '', 'attendees_master'); 
 
       renderPDFManager(p);
@@ -2108,7 +2108,7 @@
       appState.tempFormData = {
         createdDate: new Date().toISOString().split('T')[0],
         meetingDate: new Date().toISOString().split('T')[0],
-        meetingTime: lastRecord ? lastRecord.meetingTime : "14:00 - 14:15",
+        meetingTime: "",
         location: lastRecord ? lastRecord.location : "施設ご本人様居室",
         doctor: lastRecord ? lastRecord.doctor : (appState.masterDoctors[0] || ""),
         attendees: lastRecord ? lastRecord.attendees : "",
@@ -2322,12 +2322,8 @@
                 appState.tempFormData.meetingDate = meetingDate;
                 appState.tempFormData.meetingTime = meetingTime;
                 
-                // 再レンダリング（UIリセット）を避けてDOMを直接更新
-                const formMeetingDate = document.getElementById('form-meetingDate');
-                if (formMeetingDate) formMeetingDate.value = meetingDate;
-                
-                const formMeetingTime = document.getElementById('form-meetingTime');
-                if (formMeetingTime) formMeetingTime.value = meetingTime;
+                renderField('meetingDate', meetingDate, 'date');
+                renderField('meetingTime', meetingTime, 'text');
               }
             }
           };
@@ -2656,11 +2652,8 @@
           appState.tempFormData.meetingDate = meetingDate;
           appState.tempFormData.meetingTime = meetingTime;
           
-          const formMeetingDate = document.getElementById('form-meetingDate');
-          if (formMeetingDate) formMeetingDate.value = meetingDate;
-          
-          const formMeetingTime = document.getElementById('form-meetingTime');
-          if (formMeetingTime) formMeetingTime.value = meetingTime;
+          renderField('meetingDate', meetingDate, 'date');
+          renderField('meetingTime', meetingTime, 'text');
         }
       } catch (err) {
         console.error("Failed to parse audio file metadata:", err);
