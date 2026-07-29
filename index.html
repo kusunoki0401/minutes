@@ -2102,7 +2102,9 @@
         return;
       }
 
-      const lastRecord = p.records[p.records.length - 1];
+      // 日付順に確実にソートして、直近（最新）の往診記録を取得する
+      const sortedRecords = [...p.records].sort((a, b) => new Date(a.meetingDate) - new Date(b.meetingDate));
+      const lastRecord = sortedRecords[sortedRecords.length - 1];
       appState.tempFormData = {
         createdDate: new Date().toISOString().split('T')[0],
         meetingDate: new Date().toISOString().split('T')[0],
