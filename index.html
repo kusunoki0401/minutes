@@ -2307,11 +2307,6 @@
               const startDate = new Date(appState.recordingStartTime);
               const endDate = new Date(appState.recordingEndTime);
 
-              const yyyy = startDate.getFullYear();
-              const mm = String(startDate.getMonth() + 1).padStart(2, '0');
-              const dd = String(startDate.getDate()).padStart(2, '0');
-              const meetingDate = `${yyyy}-${mm}-${dd}`;
-
               const startHH = String(startDate.getHours()).padStart(2, '0');
               const startMM = String(startDate.getMinutes()).padStart(2, '0');
               const endHH = String(endDate.getHours()).padStart(2, '0');
@@ -2319,10 +2314,16 @@
               const meetingTime = `${startHH}:${startMM} - ${endHH}:${endMM}`;
 
               if (appState.tempFormData) {
-                appState.tempFormData.meetingDate = meetingDate;
-                appState.tempFormData.meetingTime = meetingTime;
+                // 手動設定された開催日があればそれを尊重（無条件に今日の日付で上書きしない）
+                if (!appState.tempFormData.meetingDate) {
+                  const yyyy = startDate.getFullYear();
+                  const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+                  const dd = String(startDate.getDate()).padStart(2, '0');
+                  appState.tempFormData.meetingDate = `${yyyy}-${mm}-${dd}`;
+                  renderField('meetingDate', appState.tempFormData.meetingDate, 'date');
+                }
                 
-                renderField('meetingDate', meetingDate, 'date');
+                appState.tempFormData.meetingTime = meetingTime;
                 renderField('meetingTime', meetingTime, 'text');
               }
             }
@@ -2630,22 +2631,35 @@
 
           document.getElementById('audio-file-name').textContent = `選択中: ${file.name} (ファイル日時: ${displayY}/${displayM}/${displayD} ${displayHH}:${displayMM}) (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
 
-          const startTimeMs = lastModifiedMs - durationMs;
-          const endTimeMs = lastModifiedMs;
+          const startDate = new Date(lastModifiedMs - durationMs);
+          const endDate = new Date(lastModifiedMs);
 
-          const startDate = new Date(startTimeMs);
-          const endDate = new Date(endTimeMs);
+          // iOS Safariでファイルの最終更新日時が破損して1970年（0:09-0:27等）になるのを完全に防護
+          if (startDate.getFullYear() >= 2020 && endDate.getFullYear() >= 2020) {
+            const yyyy = startDate.getFullYear();
+            const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(startDate.getDate()).padStart(2, '0');
+            
+            if (!appState.tempFormData.meetingDate) {
+              meetingDate = `${yyyy}-${mm}-${dd}`;
+            } else {
+              meetingDate = appState.tempFormData.meetingDate;
+            }
 
-          const yyyy = startDate.getFullYear();
-          const mm = String(startDate.getMonth() + 1).padStart(2, '0');
-          const dd = String(startDate.getDate()).padStart(2, '0');
-          meetingDate = `${yyyy}-${mm}-${dd}`;
-
-          const startHHStr = String(startDate.getHours()).padStart(2, '0');
-          const startMMStr = String(startDate.getMinutes()).padStart(2, '0');
-          const endHHStr = String(endDate.getHours()).padStart(2, '0');
-          const endMMStr = String(endDate.getMinutes()).padStart(2, '0');
-          meetingTime = `${startHHStr}:${startMMStr} - ${endHHStr}:${endMMStr}`;
+            const startHHStr = String(startDate.getHours()).padStart(2, '0');
+            const startMMStr = String(startDate.getMinutes()).padStart(2, '0');
+            const endHHStr = String(endDate.getHours()).padStart(2, '0');
+            const endMMStr = String(endDate.getMinutes()).padStart(2, '0');
+            meetingTime = `${startHHStr}:${startMMStr} - ${endHHStr}:${endMMStr}`;
+          } else {
+            // iOS Safari等でファイル日時が取得できない場合は、破綻した時間（0:09-0:27等）を絶対に入力せず、録音時間だけを表示
+            const durMin = Math.floor((durationSec || 0) / 60);
+            const durSec = Math.floor((durationSec || 0) % 60);
+            document.getElementById('audio-file-name').textContent = `選択中: ${file.name} (録音時間: ${durMin}分${durSec}秒) (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+            
+            meetingDate = appState.tempFormData.meetingDate || new Date().toISOString().split('T')[0];
+            meetingTime = appState.tempFormData.meetingTime || "";
+          }
         }
 
         if (appState.tempFormData) {
