@@ -12,22 +12,24 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
   <style>
-    /* 印刷用CSS */
+    /* 印刷用CSS (A4・1ページぴったり収まる極薄レイアウト調整) */
     @media print {
       @page {
         size: A4 portrait;
-        margin: 0; /* 標準のヘッダー・フッターを非表示にする */
+        margin: 1.0cm 1.2cm; /* ヘッダー・フッター非表示かつ余白最適化 */
       }
-      body {
-        margin: 1.4cm 1.6cm 1.4cm 1.6cm !important;
+      html, body {
+        margin: 0 !important;
         padding: 0 !important;
         background: white !important;
         color: #000000 !important;
         font-family: "BIZ UDPMincho", "Hiragino Mincho ProN", "MS Mincho", "Hiragino Kaku Gothic ProN", serif !important;
-        font-size: 10pt !important;
-        line-height: 1.5 !important;
+        font-size: 9.5pt !important;
+        line-height: 1.4 !important;
+        height: auto !important;
+        overflow: visible !important;
       }
-      header, aside, .no-print, button, input[type="file"], textarea, select, .print-hidden, audio, label, .no-print-card, #ai-progress, #ai-preview-container, .alert {
+      header, aside, .no-print, button, input[type="file"], textarea, select, .print-hidden, audio, label, .no-print-card, #ai-progress, #ai-preview-container, .alert, footer, #custom-dialog {
         display: none !important;
       }
       main {
@@ -44,17 +46,21 @@
         box-shadow: none !important;
         width: 100% !important;
         background: transparent !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       table {
         width: 100% !important;
         border-collapse: collapse !important;
-        margin-bottom: 12px !important;
+        margin-bottom: 8px !important;
       }
       th, td {
         border: 1px solid #000000 !important;
         color: #000000 !important;
-        padding: 6px 10px !important;
-        font-size: 9pt !important;
+        padding: 5px 8px !important;
+        font-size: 8.5pt !important;
       }
       .bg-slate-50 {
         background-color: #f1f5f9 !important;
@@ -71,15 +77,12 @@
         print-color-adjust: exact !important;
         border-bottom: 1px solid #000000 !important;
         font-weight: bold !important;
-        padding: 4px 10px !important;
+        padding: 3px 8px !important;
       }
       .space-y-0.5 > div > div:last-child {
-        padding: 8px 12px !important;
-        font-size: 9pt !important;
+        padding: 6px 10px !important;
+        font-size: 8.5pt !important;
         min-height: auto !important;
-      }
-      .visit-record-sheet {
-        page-break-after: always;
       }
     }
 
