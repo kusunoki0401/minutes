@@ -10,26 +10,31 @@
 
   <!-- CryptoJS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <!-- html2pdf.js (PDF生成・ファイル保存用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
-    /* 印刷用CSS (A4・1ページぴったり収まる極薄レイアウト調整) */
+    /* 印刷用CSS (A4・1ページに均等に収める可変フレックスレイアウト) */
     @media print {
       @page {
         size: A4 portrait;
-        margin: 1.0cm 1.2cm; /* ヘッダー・フッター非表示かつ余白最適化 */
+        margin: 0.6cm 0.8cm 0.5cm 0.8cm;
       }
-      html, body {
+      html, body, main, #main-content, #patient-panel {
         margin: 0 !important;
         padding: 0 !important;
-        background: white !important;
+        background: #ffffff !important;
         color: #000000 !important;
         font-family: "BIZ UDPMincho", "Hiragino Mincho ProN", "MS Mincho", "Hiragino Kaku Gothic ProN", serif !important;
-        font-size: 9.5pt !important;
-        line-height: 1.4 !important;
-        height: auto !important;
+        font-size: 10.5pt !important;
+        line-height: 1.35 !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 100% !important;
         overflow: visible !important;
+        box-sizing: border-box !important;
       }
-      header, aside, .no-print, button, input[type="file"], textarea, select, .print-hidden, audio, label, .no-print-card, #ai-progress, #ai-preview-container, .alert, footer, #custom-dialog {
+      header, aside, .no-print, button, input[type="file"], textarea, select, .print-hidden, audio, label, .no-print-card, #ai-progress, #ai-preview-container, .alert, footer, #custom-dialog, #print-guide-modal {
         display: none !important;
       }
       main {
@@ -37,7 +42,10 @@
         margin: 0 !important;
         width: 100% !important;
         display: block !important;
-        background: white !important;
+        background: #ffffff !important;
+      }
+      .visit-record-sheet, .visit-record-sheet * {
+        color: #000000 !important;
       }
       .visit-record-sheet {
         border: none !important;
@@ -45,44 +53,81 @@
         margin: 0 !important;
         box-shadow: none !important;
         width: 100% !important;
-        background: transparent !important;
+        max-width: 100% !important;
+        min-height: 27.0cm !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        background: #ffffff !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+        box-sizing: border-box !important;
       }
-      table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-        margin-bottom: 8px !important;
+      .visit-record-sheet > .space-y-3,
+      .visit-record-sheet > .space-y-4 {
+        flex: 1 1 auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        gap: 6px !important;
       }
-      th, td {
-        border: 1px solid #000000 !important;
-        color: #000000 !important;
-        padding: 5px 8px !important;
-        font-size: 8.5pt !important;
+      .space-y-0.5,
+      .visit-record-sheet .border.border-black {
+        flex: 1 1 auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
       }
-      .bg-slate-50 {
-        background-color: #f1f5f9 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
+      .space-y-0.5 > div,
+      .visit-record-sheet .border.border-black > div {
+        flex: 1 1 0px !important;
+        display: flex !important;
+        flex-direction: column !important;
       }
-      .space-y-0.5 > div {
-        border: 1px solid #000000 !important;
-        margin-bottom: -1px !important;
-      }
-      .space-y-0.5 > div > div:first-child {
+      .space-y-0.5 > div > div:first-child,
+      .visit-record-sheet .border.border-black > div > div:first-child {
         background-color: #f1f5f9 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         border-bottom: 1px solid #000000 !important;
         font-weight: bold !important;
-        padding: 3px 8px !important;
+        padding: 3px 6px !important;
+        font-size: 10pt !important;
+        color: #000000 !important;
+        flex: 0 0 auto !important;
       }
-      .space-y-0.5 > div > div:last-child {
-        padding: 6px 10px !important;
-        font-size: 8.5pt !important;
-        min-height: auto !important;
+      .space-y-0.5 > div > div:last-child,
+      .visit-record-sheet .border.border-black > div > div:last-child {
+        flex: 1 1 auto !important;
+        padding: 6px 8px !important;
+        font-size: 10.5pt !important;
+        line-height: 1.35 !important;
+        min-height: 2.1cm !important;
+        color: #000000 !important;
+        font-weight: 600 !important;
+      }
+      table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-bottom: 4px !important;
+      }
+      th, td {
+        border: 1px solid #000000 !important;
+        color: #000000 !important;
+        padding: 3px 6px !important;
+        font-size: 10.5pt !important;
+        line-height: 1.3 !important;
+      }
+      #sheet-patient-name {
+        font-size: 11.5pt !important;
+        font-weight: bold !important;
+      }
+      .bg-slate-50 {
+        background-color: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
     }
 
@@ -107,6 +152,28 @@
     button, label, [role="button"] {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 画面表示およびPDF出力用フォント・視認性強化スタイル */
+    .visit-record-sheet, .visit-record-sheet * {
+      color: #000000 !important;
+      -webkit-font-smoothing: antialiased;
+    }
+    .visit-record-sheet p, 
+    .visit-record-sheet div, 
+    .visit-record-sheet td, 
+    .visit-record-sheet span {
+      color: #000000 !important;
+    }
+    .visit-record-sheet #field-nurse-container p,
+    .visit-record-sheet #field-exam-content-container p,
+    .visit-record-sheet #field-exam-result-container p,
+    .visit-record-sheet #field-precautions-container p,
+    .visit-record-sheet #field-decisions-container p,
+    .visit-record-sheet #field-remarks-container p {
+      color: #000000 !important;
+      font-weight: 600 !important;
+      font-size: 14px !important;
     }
   </style>
 </head>
@@ -270,11 +337,21 @@
               </button>
               <button 
                 onclick="triggerPrint()"
-                class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-lg shadow-sm text-sm font-bold flex items-center space-x-2 transition cursor-pointer"
+                class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-3 rounded-lg shadow-sm text-sm font-bold flex items-center space-x-1.5 transition cursor-pointer"
                 style="min-height: 44px;"
+                title="紙のプリンターで直接印刷します"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.615 0-1.101-.482-1.12-1.08L5.89 18m11.77 0H5.89m12.77-5.174c.412-.064.82-.142 1.222-.234A1.875 1.875 0 0021 10.75A1.875 1.875 0 0019.25 9h-14.5A1.875 1.875 0 003 10.75a1.875 1.875 0 001.122 1.726c.401.092.81.17 1.222.234m13.87 0a40.48 40.48 0 01-13.87 0M17.25 9V5.625A1.875 1.875 0 0015.375 3.75h-6.75A1.875 1.875 0 006.75 5.625V9" /></svg>
-                <span>印刷する / PDF保存</span>
+                <span>紙に印刷</span>
+              </button>
+              <button 
+                onclick="downloadPDF()"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg shadow-sm text-sm font-bold flex items-center space-x-1.5 transition cursor-pointer"
+                style="min-height: 44px;"
+                title="保存場所やファイル名を指定してPDFファイルとして保存します"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                <span>PDFで保存</span>
               </button>
               <button 
                 onclick="enterEditMode()"
@@ -601,138 +678,137 @@
         </div>
 
         <!-- 往診報告書様式シート本体 -->
-        <div class="visit-record-sheet bg-white text-black p-0 border border-slate-200 md:p-8 rounded shadow-sm print:shadow-none print:border-none font-serif leading-relaxed">
+        <div class="visit-record-sheet bg-white text-black p-4 md:p-6 rounded shadow-sm print:shadow-none print:border-none font-serif leading-relaxed" style="color: #000000 !important;">
           
           <!-- 表題部 -->
-          <div class="flex flex-col mb-6 border-b-2 border-black pb-2 select-none">
-            <div class="flex justify-between items-center text-[10px] text-slate-500 font-sans mb-1">
-              <span>施設保管用 / 連携医療機関共有用</span>
+          <div class="flex flex-col mb-3 border-b border-black pb-2 select-none">
+            <div class="flex justify-end items-center text-[10px] text-black font-sans mb-0.5">
               <span>協力医療機関連携加算 算定参考様式</span>
             </div>
-            <h1 class="text-center text-xl font-bold tracking-widest font-serif my-2 text-black">
+            <h1 class="text-center text-xl font-bold tracking-widest font-serif my-1 text-black">
               訪問診療記録・個別カンファレンス議事録
             </h1>
           </div>
 
-          <div class="space-y-4 font-sans text-black">
+          <div class="space-y-3 font-sans text-black">
             
             <!-- 基本情報（診療基本部分） -->
-            <table class="w-full border-collapse border border-black text-sm">
+            <table class="w-full border-collapse border border-black text-sm text-black">
               <tbody>
                 <tr>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold w-1/6 font-sans select-none">入居者氏名</td>
-                  <td class="border border-black px-3 py-2.5 w-2/6 font-bold text-base animate-fadeIn" id="sheet-patient-name">ー</td>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold w-1/6 font-sans select-none">議事録作成日</td>
-                  <td class="border border-black px-3 py-2.5 w-2/6" id="field-createdDate-container">
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold w-1/6 font-sans text-black select-none">入居者氏名</td>
+                  <td class="border border-black px-3 py-2 w-2/6 font-bold text-base text-black animate-fadeIn" id="sheet-patient-name">ー</td>
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold w-1/6 font-sans text-black select-none">議事録作成日</td>
+                  <td class="border border-black px-3 py-2 w-2/6 text-black" id="field-createdDate-container">
                     <!-- JSで閲覧用か編集用を出し分け -->
                   </td>
                 </tr>
                 <tr>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold font-sans select-none">開催場所</td>
-                  <td class="border border-black px-3 py-2.5" id="field-location-container">ー</td>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold font-sans select-none">開催日</td>
-                  <td class="border border-black px-3 py-2.5" id="field-meetingDate-container">ー</td>
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold font-sans text-black select-none">開催場所</td>
+                  <td class="border border-black px-3 py-2 text-black" id="field-location-container">ー</td>
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold font-sans text-black select-none">開催日</td>
+                  <td class="border border-black px-3 py-2 text-black" id="field-meetingDate-container">ー</td>
                 </tr>
                 <tr>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold font-sans select-none">担当医師</td>
-                  <td class="border border-black px-3 py-2.5" id="field-doctor-container">ー</td>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold font-sans select-none">開催時間</td>
-                  <td class="border border-black px-3 py-2.5" id="field-meetingTime-container">ー</td>
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold font-sans text-black select-none">担当医師</td>
+                  <td class="border border-black px-3 py-2 text-black" id="field-doctor-container">ー</td>
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold font-sans text-black select-none">開催時間</td>
+                  <td class="border border-black px-3 py-2 text-black" id="field-meetingTime-container">ー</td>
                 </tr>
                 <tr>
-                  <td class="border border-black bg-slate-50 px-3 py-2.5 font-bold font-sans select-none">出席者リスト</td>
-                  <td colSpan="3" class="border border-black px-3 py-2.5" id="field-attendees-container">ー</td>
+                  <td class="border border-black bg-slate-50 px-3 py-2 font-bold font-sans text-black select-none">出席者リスト</td>
+                  <td colSpan="3" class="border border-black px-3 py-2 text-black" id="field-attendees-container">ー</td>
                 </tr>
               </tbody>
             </table>
 
             <!-- バイタルおよび体重測定テーブル -->
-            <table class="w-full border-collapse border border-black text-sm">
+            <table class="w-full border-collapse border border-black text-sm text-black">
               <thead>
-                <tr class="bg-slate-50 font-sans select-none">
-                  <th colSpan="4" class="border border-black px-3 py-2 font-bold text-left">当日のバイタル測定値</th>
-                  <th colSpan="2" class="border border-black px-3 py-2 font-bold text-left">体重報告</th>
+                <tr class="bg-slate-50 font-sans text-black select-none">
+                  <th colSpan="4" class="border border-black px-3 py-1.5 font-bold text-left text-black">当日のバイタル測定値</th>
+                  <th colSpan="2" class="border border-black px-3 py-1.5 font-bold text-left text-black">体重報告</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <!-- 血圧 -->
-                  <td class="border border-black px-3 py-2 text-center w-[18%]">
-                    <div class="font-bold mb-1 font-sans text-xs select-none">血圧</div>
-                    <div id="field-bp-container" class="font-sans"></div>
+                  <td class="border border-black px-2 py-1.5 text-center w-[18%] text-black">
+                    <div class="font-bold mb-0.5 font-sans text-xs text-black select-none">血圧</div>
+                    <div id="field-bp-container" class="font-sans text-black"></div>
                   </td>
                   <!-- 体温 -->
-                  <td class="border border-black px-3 py-2 text-center w-[18%]">
-                    <div class="font-bold mb-1 font-sans text-xs select-none">体温</div>
-                    <div id="field-temp-container" class="font-sans"></div>
+                  <td class="border border-black px-2 py-1.5 text-center w-[18%] text-black">
+                    <div class="font-bold mb-0.5 font-sans text-xs text-black select-none">体温</div>
+                    <div id="field-temp-container" class="font-sans text-black"></div>
                   </td>
                   <!-- 脈拍 -->
-                  <td class="border border-black px-3 py-2 text-center w-[18%]">
-                    <div class="font-bold mb-1 font-sans text-xs select-none">脈拍</div>
-                    <div id="field-pulse-container" class="font-sans"></div>
+                  <td class="border border-black px-2 py-1.5 text-center w-[18%] text-black">
+                    <div class="font-bold mb-0.5 font-sans text-xs text-black select-none">脈拍</div>
+                    <div id="field-pulse-container" class="font-sans text-black"></div>
                   </td>
                   <!-- Spo2 -->
-                  <td class="border border-black px-3 py-2 text-center w-[18%]">
-                    <div class="font-bold mb-1 font-sans text-xs select-none">Spo2</div>
-                    <div id="field-spo2-container" class="font-sans"></div>
+                  <td class="border border-black px-2 py-1.5 text-center w-[18%] text-black">
+                    <div class="font-bold mb-0.5 font-sans text-xs text-black select-none">Spo2</div>
+                    <div id="field-spo2-container" class="font-sans text-black"></div>
                   </td>
                   <!-- 先月体重 -->
-                  <td class="border border-black px-3 py-2 text-center w-[14%]">
-                    <div class="font-bold mb-1 font-sans text-xs select-none">先月</div>
-                    <div id="field-weight-prev-container" class="font-sans"></div>
+                  <td class="border border-black px-2 py-1.5 text-center w-[14%] text-black">
+                    <div class="font-bold mb-0.5 font-sans text-xs text-black select-none">先月</div>
+                    <div id="field-weight-prev-container" class="font-sans text-black"></div>
                   </td>
                   <!-- 今月体重 -->
-                  <td class="border border-black px-3 py-2 text-center w-[14%]">
-                    <div class="font-bold mb-1 font-sans text-xs select-none">今月</div>
-                    <div id="field-weight-curr-container" class="font-sans"></div>
+                  <td class="border border-black px-2 py-1.5 text-center w-[14%] text-black">
+                    <div class="font-bold mb-0.5 font-sans text-xs text-black select-none">今月</div>
+                    <div id="field-weight-curr-container" class="font-sans text-black"></div>
                   </td>
                 </tr>
               </tbody>
             </table>
 
-            <!-- カンファレンス記載部分 -->
-            <div class="space-y-0.5 animate-fadeIn">
+            <!-- カンファレンス記載部分（単一外枠・2重線防止構造・A4均等延伸） -->
+            <div class="border border-black text-black animate-fadeIn">
               
-              <div class="border border-black border-b-0">
-                <div class="bg-slate-50 px-3 py-1.5 font-bold text-xs border-b border-black font-sans select-none">
+              <div class="border-b border-black">
+                <div class="bg-slate-50 px-3 py-1 font-bold text-xs border-b border-black font-sans text-black select-none">
                   施設看護師から相談内容
                 </div>
-                <div class="p-3 min-h-[60px]" id="field-nurse-container">ー</div>
+                <div class="p-2.5 min-h-[72px] text-black" id="field-nurse-container">ー</div>
               </div>
 
-              <div class="border border-black border-b-0">
-                <div class="bg-slate-50 px-3 py-1.5 font-bold text-xs border-b border-black font-sans select-none">
+              <div class="border-b border-black">
+                <div class="bg-slate-50 px-3 py-1 font-bold text-xs border-b border-black font-sans text-black select-none">
                   訪問診療時の診察内容
                 </div>
-                <div class="p-3 min-h-[60px]" id="field-exam-content-container">ー</div>
+                <div class="p-2.5 min-h-[72px] text-black" id="field-exam-content-container">ー</div>
               </div>
 
-              <div class="border border-black border-b-0">
-                <div class="bg-slate-50 px-3 py-1.5 font-bold text-xs border-b border-black font-sans select-none">
+              <div class="border-b border-black">
+                <div class="bg-slate-50 px-3 py-1 font-bold text-xs border-b border-black font-sans text-black select-none">
                   診察結果
                 </div>
-                <div class="p-3 min-h-[60px]" id="field-exam-result-container">ー</div>
+                <div class="p-2.5 min-h-[72px] text-black" id="field-exam-result-container">ー</div>
               </div>
 
-              <div class="border border-black border-b-0">
-                <div class="bg-slate-50 px-3 py-1.5 font-bold text-xs border-b border-black font-sans select-none">
+              <div class="border-b border-black">
+                <div class="bg-slate-50 px-3 py-1 font-bold text-xs border-b border-black font-sans text-black select-none">
                   診察を受け注意すべき事項
                 </div>
-                <div class="p-3 min-h-[60px] font-semibold" id="field-precautions-container">ー</div>
+                <div class="p-2.5 min-h-[72px] font-semibold text-black" id="field-precautions-container">ー</div>
               </div>
 
-              <div class="border border-black border-b-0">
-                <div class="bg-slate-50 px-3 py-1.5 font-bold text-xs border-b border-black font-sans select-none">
+              <div class="border-b border-black">
+                <div class="bg-slate-50 px-3 py-1 font-bold text-xs border-b border-black font-sans text-black select-none">
                   共有すべき事項・決定事項等
                 </div>
-                <div class="p-3 min-h-[70px]" id="field-decisions-container">ー</div>
+                <div class="p-2.5 min-h-[72px] text-black" id="field-decisions-container">ー</div>
               </div>
 
-              <div class="border border-black">
-                <div class="bg-slate-50 px-3 py-1.5 font-bold text-xs border-b border-black font-sans select-none">
+              <div>
+                <div class="bg-slate-50 px-3 py-1 font-bold text-xs border-b border-black font-sans text-black select-none">
                   備考
                 </div>
-                <div class="p-3 min-h-[50px] text-slate-600 font-sans" id="field-remarks-container">ー</div>
+                <div class="p-2.5 min-h-[72px] text-black font-sans" id="field-remarks-container">ー</div>
               </div>
 
             </div>
@@ -740,7 +816,7 @@
           </div>
 
           <!-- フッター -->
-          <div class="mt-4 flex justify-between items-center text-[10px] text-slate-500 font-sans border-t border-slate-200 pt-2 select-none">
+          <div class="mt-3 flex justify-between items-center text-[10px] text-black font-sans border-t border-black pt-1.5 select-none">
             <span>※ 本様式は、介護保険「協力医療機関連携加算」の算定要件に則った記録様式です。</span>
             <span>施設保管用 兼 ご家族説明用控え</span>
           </div>
@@ -1023,41 +1099,7 @@
     </div>
   </div>
 
-  <!-- 印刷案内用モーダル -->
-  <div id="print-guide-modal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-[999] no-print hidden" style="display: none;">
-    <div class="bg-white rounded-lg max-w-md w-full p-6 shadow-xl animate-zoomIn text-black font-sans select-none">
-      <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-4">
-        <h3 class="text-lg font-bold text-slate-800 flex items-center space-x-2">
-          <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.615 0-1.101-.482-1.12-1.08L5.89 18m11.77 0H5.89m12.77-5.174c.412-.064.82-.142 1.222-.234A1.875 1.875 0 0021 10.75A1.875 1.875 0 0019.25 9h-14.5A1.875 1.875 0 003 10.75a1.875 1.875 0 001.122 1.726c.401.092.81.17 1.222.234m13.87 0a40.48 40.48 0 01-13.87 0M17.25 9V5.625A1.875 1.875 0 0015.375 3.75h-6.75A1.875 1.875 0 006.75 5.625V9" /></svg>
-          <span>印刷・PDF保存のご案内</span>
-        </h3>
-        <button onclick="closePrintGuide()" class="text-slate-400 hover:text-slate-600 font-bold text-lg p-2">&times;</button>
-      </div>
-      <div class="space-y-4 text-sm text-slate-600 leading-relaxed">
-        <p class="font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded border border-emerald-100">
-          iPadや特定のセキュリティ環境下では、自動印刷ダイアログの起動が制限されることがあります。
-        </p>
-        <p>その場合は、以下の手順で標準の印刷機能、またはPDF書き出しをご利用ください。</p>
-        
-        <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2 text-xs">
-          <div class="font-bold text-slate-800 font-sans">【iPad (Safari/本体機能) の場合】</div>
-          <ol class="list-decimal pl-4 space-y-1">
-            <li>画面右上、または下のメニューにある <b class="text-slate-800">「共有ボタン」</b> (四角に上矢印のアイコン) をタップします。</li>
-            <li>表示されたメニューを下にスクロールし, <b class="text-slate-800 font-bold">「プリント」</b> をタップします。</li>
-            <li>プレビュー画面をピンチアウト（2本の指で広げるズーム）すると、A4サイズに収まったPDFに変換されます。</li>
-          </ol>
-          <div class="font-bold text-slate-800 pt-2 border-t border-slate-200 mt-2 font-sans">【パソコン (Chrome/Edge/Safari) の場合】</div>
-          <ol class="list-decimal pl-4 space-y-1">
-            <li>キーボードの <kbd class="bg-white border px-1 rounded shadow-sm text-[10px]">Ctrl</kbd> + <kbd class="bg-white border px-1 rounded shadow-sm text-[10px]">P</kbd> (Macは <kbd class="bg-white border px-1 rounded shadow-sm text-[10px]">Cmd</kbd> + <kbd class="bg-white border px-1 rounded shadow-sm text-[10px]">Cmd</kbd> + <kbd class="bg-white border px-1 rounded shadow-sm text-[10px]">P</kbd>) を同時に押します。</li>
-            <li>またはブラウザ右上のメニュー「設定 ＞ 印刷」から印刷を起動します。</li>
-          </ol>
-        </div>
-      </div>
-      <div class="border-t border-slate-200 pt-4 flex justify-end mt-4">
-        <button onclick="closePrintGuide()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold cursor-pointer">手順を確認しました</button>
-      </div>
-    </div>
-  </div>
+
 
   <!-- 共通カスタムアラート用コンテナ -->
   <div id="custom-dialog" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-[999] no-print hidden flex" style="display: none;">
@@ -2086,7 +2128,7 @@
           >${value || ''}</textarea>
         `;
       } else {
-        container.innerHTML = `<p class="whitespace-pre-wrap text-sm leading-relaxed">${value || '（特記なし）'}</p>`;
+        container.innerHTML = `<p class="whitespace-pre-wrap text-[14px] font-semibold text-black leading-relaxed" style="color: #000000 !important; font-weight: 600;">${value || '（特記なし）'}</p>`;
       }
     }
 
@@ -2797,9 +2839,25 @@
       try {
         let payloadContents = [];
         const systemInstruction = `
-        あなたは優秀な医療事務アシスタントおよび介護施設看護スタッフです。
+        あなたは介護施設（有料老人ホーム、グループホーム、特養等）の医療・看護スタッフおよび施設管理者です。
         提供された訪問診療（往診）時の会話録音、または文字起こしテキストから、
-        指定された個別カンファレンス議事録様式に適合する情報を可能な限り正確に、適切に要約・整理して抽出してください。
+        必ず「施設側（看護師・ケアスタッフ）」の視点・立場で要約文を作成し、指定された個別カンファレンス議事録様式に適合する情報を抽出してください。
+
+        【重要：立場・文脈の記述ルール（絶対厳守）】
+        - 文章の作成主体系は「施設側（施設看護師・施設スタッフ）」の立場に統一してください。
+        - ❌ 誤った表現（医師視点）: 「〜のご相談を受けました」「〜について指導・伝達した」
+        - ⭕ 正しい表現（施設視点）: 「〜について医師に相談・報告しました」「〜について医師より指示・指導を受けました」「〜の対応方針となりました」
+        - 丁寧な敬体（〜です、〜ます、〜報告しました、〜指示を受けました等）で記述してください。
+
+        【重要：難解な医療・介護専門用語の平易化・分かりやすい文章作成ルール（絶対厳守）】
+        - 録音会話内に医師や看護師が発言した「難解な医療専門用語」「臨床略語」「専門的な病名・所見・処方薬の専門用語」が含まれている場合は、ご家族や介護スタッフなど「誰が読んでも一目で直感的に理解できる平易な日常言葉」に噛み砕いて文章を作成してください。
+        - 専門用語を残す必要がある場合は、平易な表現を主とし、カッコ書きで専門用語を補助添えしてください。
+          （例: ❌「聴診で喘鳴を認めた」 → ⭕「呼吸時にゼーゼー・ヒューヒューという音（喘鳴）が見られました」）
+          （例: ❌「下肢に浮腫あり」 → ⭕「両足にむくみ（浮腫）が見られました」）
+          （例: ❌「褥瘡予防のため除圧を図る」 → ⭕「床ずれ（褥瘡）を防ぐため体重がかかる位置や体位を調整」）
+          （例: ❌「誤嚥のリスクあり」 → ⭕「食べ物や唾液が誤って気管に入る（誤嚥）リスクがある」）
+          （例: ❌「紅斑・発赤部位の視診」 → ⭕「皮膚の赤み（発赤）がある部位の確認」）
+          （例: ❌「徐脈傾向」 → ⭕「脈拍が通常より遅くなる傾向（徐脈）」）
 
         【様式に当てはめるべき項目とJSONキー】：
         - vital_bp_systolic (血圧の最高値。数値のみ。例: 120)
@@ -2808,12 +2866,12 @@
         - vital_pulse (脈拍。数値のみ。例: 72)
         - vital_spo2 (酸素飽和度。数値のみ。例: 98)
         - weight_curr (今月の測定体重。数値のみ。例: 52.3)
-        - nurse_consultation (施設看護師・スタッフからの相談、課題、様子を丁寧な敬体（〜です、〜ます等）で要約)
-        - exam_content (医師が実施した診察、検査、問診内容)
-        - exam_result (診察した結果の、身体的・精神的な医学的所見)
-        - precautions (スタッフや家族が日常生活やケアにおいて「注意すべき事項」やリスク対策)
-        - shared_decisions (医師、施設、家族間で「決定した事項」、処方や今後のケア方針)
-        - remarks (その他特記事項や家族説明状況)
+        - nurse_consultation (施設看護師・スタッフから主治医へ「相談・報告した内容」。例: 「〜の症状が見られるため主治医へ相談いたしました」)
+        - exam_content (訪問診療時に医師が実施・確認した診察内容、問診、検査)
+        - exam_result (診察により判明した医学的所見や様子。誰でも分かる平易な言葉で記述)
+        - precautions (今後施設スタッフやご家族が日常生活やケアにおいて「注意すべき点」「医師より指導されたリスク対策」。誰でも実践できるよう分かりやすく記述)
+        - shared_decisions (医師・施設・家族間で「決定・合意した事項」、処方内容や今後のケア・治療方針)
+        - remarks (その他特記事項やご家族への説明・共有状況)
 
         【出力ルール】
         必ず有効なJSONオブジェクトのみを返却してください。余計な説明や前置き、マークダウンのコードブロック( \`\`\`json ... \`\`\` )は一切不要です。
@@ -3684,31 +3742,77 @@
       triggerSync(false); 
     }
 
-    // --- 印刷・モーダル制御 ---
+    // --- 印刷・PDF保存制御 ---
     function triggerPrint() {
-      try {
-        const printSuccess = window.print();
-        if (printSuccess === undefined) {
-          setTimeout(() => {
-            showPrintGuide();
-          }, 1500);
-        }
-      } catch (err) {
-        console.warn("Direct printing blocked:", err);
-        showPrintGuide();
+      window.print();
+    }
+
+    async function downloadPDF() {
+      const element = document.querySelector('.visit-record-sheet');
+      if (!element) {
+        showMsg("エラー", "印刷用シートが見つかりません。", "error");
+        return;
       }
-    }
 
-    function showPrintGuide() {
-      const modal = document.getElementById('print-guide-modal');
-      modal.classList.remove('hidden');
-      modal.style.display = 'flex';
-    }
+      const nameEl = document.getElementById('sheet-patient-name');
+      const patientName = nameEl ? nameEl.textContent.replace(/\s+/g, '').replace('様', '').trim() : '入居者';
+      const dateEl = document.getElementById('field-meetingDate-container');
+      const meetingDate = dateEl ? dateEl.textContent.trim() : '';
 
-    function closePrintGuide() {
-      const modal = document.getElementById('print-guide-modal');
-      modal.classList.add('hidden');
-      modal.style.display = 'none';
+      const safeName = patientName || '訪問診療記録';
+      const safeDate = meetingDate || new Date().toISOString().split('T')[0];
+      const filename = `訪問診療記録_${safeName}_${safeDate}.pdf`;
+
+      if (window.html2pdf) {
+        showMsg("PDFを作成中", "保存ダイアログの準備を行っています...", "info");
+        const opt = {
+          margin: [6, 6, 6, 6],
+          filename: filename,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        try {
+          const pdfWorker = html2pdf().set(opt).from(element);
+
+          // PC (Chrome / Edge 等) で「名前を付けて保存」ダイアログを自動ポップアップ表示（前回フォルダを自動記憶）
+          if ('showSaveFilePicker' in window) {
+            try {
+              const blob = await pdfWorker.output('blob');
+              const handle = await window.showSaveFilePicker({
+                id: 'visit_record_pdf_save_dir', // ← このIDによりブラウザが前回最後に指定した保存フォルダを自動記憶
+                startIn: 'documents',
+                suggestedName: filename,
+                types: [{
+                  description: 'PDF Document',
+                  accept: { 'application/pdf': ['.pdf'] }
+                }]
+              });
+              const writable = await handle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+              showMsg("完了", "指定された場所へPDFファイルを保存しました。", "success");
+              return;
+            } catch (pickerErr) {
+              if (pickerErr.name === 'AbortError') {
+                showMsg("キャンセル", "PDFの保存をキャンセルしました。", "info");
+                return;
+              }
+              // API例外時は通常の自動保存へフォールバック
+            }
+          }
+
+          // iPad Safari 等の showSaveFilePicker 非対応環境用フォールバック
+          await pdfWorker.save();
+        } catch (err) {
+          console.error("html2pdf failed, fallback to print:", err);
+          window.print();
+        }
+      } else {
+        window.print();
+      }
     }
 
     function openSettingsModal() {
