@@ -2634,6 +2634,45 @@
         };
       }
 
+      // 5. パターン: ユーザー指定形式（対象者名＋時間 例: 佐々木大介 9:45, 佐々木大介 9：45, 9時45分 など）
+      const normalized = name.replace(/：/g, ':').replace(/時/g, ':').replace(/分/g, '');
+      const p5 = /(?:^|[^\d])(\d{1,2}):(\d{2})(?:[^\d]|$)/;
+      m = normalized.match(p5);
+      if (m) {
+        const hh = parseInt(m[1], 10);
+        const mm = parseInt(m[2], 10);
+        if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+          return {
+            date: "", // 日付は含まれないため既存または今日の日付を使用
+            timeStart: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+          };
+        }
+      }
+
+      return null;
+    }
+
+    // ファイル名から入居者マスタを検索・自動一致
+    function matchPatientFromFilename(filename) {
+      if (!appState.patients || appState.patients.length === 0) return null;
+      const name = filename.substring(0, filename.lastIndexOf('.')) || filename;
+      const cleanFilename = name.replace(/[\s\u3000]+/g, '');
+
+      // 名前の長い順（フルネーム優先）でソート
+      const sortedPatients = [...appState.patients]
+        .filter(p => !p.deleted)
+        .sort((a, b) => (b.name || '').length - (a.name || '').length);
+
+      for (const p of sortedPatients) {
+        const cleanName = (p.name || '').replace(/[\s\u3000]+/g, '');
+        const cleanKana = (p.kana || '').replace(/[\s\u3000]+/g, '');
+        if (cleanName && cleanFilename.includes(cleanName)) {
+          return p;
+        }
+        if (cleanKana && cleanFilename.includes(cleanKana)) {
+          return p;
+        }
+      }
       return null;
     }
 
@@ -2658,62 +2697,86 @@
       // リスト描画
       renderAudioFileList();
 
-      // 日時・時間の解析
+      const firstFile = appState.audioFiles[0];
+      if (!firstFile) {
+        input.value = "";
+        return;
+      }
+
+      // 1. ファイル名から対象者を自動照合・選択切り替え
+      const matchedPatient = matchPatientFromFilename(firstFile.name);
+      if (matchedPatient) {
+        const isDifferentPatient = (appState.selectedPatientId !== matchedPatient.id);
+        if (isDifferentPatient || !appState.isEditing) {
+          appState.selectedPatientId = matchedPatient.id;
+          startNewRecord(); // 対象入居者の新規レコード作成モードへ即時切替
+        }
+      }
+
+      // 2. 日時・時間の解析（一律15分後に終了時間）
       try {
         let meetingDate = "";
         let meetingTime = "";
-        const firstFile = appState.audioFiles[0];
 
-        if (firstFile) {
-          const durationSec = await getAudioDuration(firstFile);
-          const durationMs = (durationSec && durationSec > 0) ? (durationSec * 1000) : (15 * 60 * 1000);
-
-          const parsedMeta = parseDateTimeFromFilename(firstFile.name);
-          if (parsedMeta) {
+        const parsedMeta = parseDateTimeFromFilename(firstFile.name);
+        if (parsedMeta && parsedMeta.timeStart) {
+          if (parsedMeta.date) {
             meetingDate = parsedMeta.date;
-            const [startHH, startMM] = parsedMeta.timeStart.split(':').map(Number);
-            const startDate = new Date();
-            startDate.setHours(startHH, startMM, 0, 0);
-            
-            const endDate = new Date(startDate.getTime() + durationMs);
-            const endHH = String(endDate.getHours()).padStart(2, '0');
-            const endMM = String(endDate.getMinutes()).padStart(2, '0');
-            meetingTime = `${parsedMeta.timeStart} - ${endHH}:${endMM}`;
-          } else {
-            let lastModifiedMs = firstFile.lastModified || Date.now();
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            if (isIOS) {
-              const tzOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
-              lastModifiedMs += tzOffsetMs;
-            }
+          }
+          // 開始時間から一律15分後を終了時間として計算
+          const [startHH, startMM] = parsedMeta.timeStart.split(':').map(Number);
+          const totalStartMin = startHH * 60 + startMM;
+          const totalEndMin = (totalStartMin + 15) % (24 * 60);
+          const endHH = String(Math.floor(totalEndMin / 60)).padStart(2, '0');
+          const endMM = String(totalEndMin % 60).padStart(2, '0');
+          meetingTime = `${parsedMeta.timeStart} - ${endHH}:${endMM}`;
+        } else {
+          // ファイル名に時刻がない場合は、ファイルの更新日時を使用（一律15分間枠）
+          let lastModifiedMs = firstFile.lastModified || Date.now();
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+          if (isIOS) {
+            const tzOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
+            lastModifiedMs += tzOffsetMs;
+          }
 
-            const startDate = new Date(lastModifiedMs - durationMs);
-            const endDate = new Date(lastModifiedMs);
+          const startDate = new Date(lastModifiedMs);
+          const endDate = new Date(lastModifiedMs + 15 * 60 * 1000);
 
-            if (startDate.getFullYear() >= 2020 && endDate.getFullYear() >= 2020) {
-              const yyyy = startDate.getFullYear();
-              const mm = String(startDate.getMonth() + 1).padStart(2, '0');
-              const dd = String(startDate.getDate()).padStart(2, '0');
-              meetingDate = appState.tempFormData.meetingDate || `${yyyy}-${mm}-${dd}`;
+          if (startDate.getFullYear() >= 2020) {
+            const yyyy = startDate.getFullYear();
+            const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(startDate.getDate()).padStart(2, '0');
+            meetingDate = `${yyyy}-${mm}-${dd}`;
 
-              const startHHStr = String(startDate.getHours()).padStart(2, '0');
-              const startMMStr = String(startDate.getMinutes()).padStart(2, '0');
-              const endHHStr = String(endDate.getHours()).padStart(2, '0');
-              const endMMStr = String(endDate.getMinutes()).padStart(2, '0');
-              meetingTime = `${startHHStr}:${startMMStr} - ${endHHStr}:${endMMStr}`;
-            } else {
-              meetingDate = appState.tempFormData.meetingDate || new Date().toISOString().split('T')[0];
-              meetingTime = appState.tempFormData.meetingTime || "";
-            }
+            const startHHStr = String(startDate.getHours()).padStart(2, '0');
+            const startMMStr = String(startDate.getMinutes()).padStart(2, '0');
+            const endHHStr = String(endDate.getHours()).padStart(2, '0');
+            const endMMStr = String(endDate.getMinutes()).padStart(2, '0');
+            meetingTime = `${startHHStr}:${startMMStr} - ${endHHStr}:${endMMStr}`;
           }
         }
 
         if (appState.tempFormData) {
-          appState.tempFormData.meetingDate = meetingDate;
-          appState.tempFormData.meetingTime = meetingTime;
-          
-          renderField('meetingDate', meetingDate, 'date');
-          renderField('meetingTime', meetingTime, 'text');
+          if (meetingDate) {
+            appState.tempFormData.meetingDate = meetingDate;
+            renderField('meetingDate', meetingDate, 'date');
+          } else if (!appState.tempFormData.meetingDate) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            appState.tempFormData.meetingDate = todayStr;
+            renderField('meetingDate', todayStr, 'date');
+          }
+
+          if (meetingTime) {
+            appState.tempFormData.meetingTime = meetingTime;
+            renderField('meetingTime', meetingTime, 'text');
+          }
+        }
+
+        // 自動照合の成功メッセージ案内
+        if (matchedPatient) {
+          showMsg("対象者と時間を自動認識", `「${matchedPatient.name} 様」を自動選択し、開催時間を「${meetingTime || '自動計算'}」に設定しました。`, "success");
+        } else if (meetingTime) {
+          showMsg("時間を自動設定", `開催時間を「${meetingTime}」（開始から15分後）に設定しました。`, "info");
         }
       } catch (err) {
         console.error("Failed to parse audio file metadata:", err);
