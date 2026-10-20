@@ -228,28 +228,51 @@
     <!-- サイドバー (印刷時非表示) -->
     <aside class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col no-print shrink-0">
       
-      <!-- 入居者検索 & 新規追加 -->
-      <div class="p-4 border-b border-slate-100 bg-slate-50 select-none">
-        <div class="flex justify-between items-center mb-3">
-          <h2 class="font-bold text-slate-700 flex items-center space-x-1.5">
+      <!-- 入居者検索 & 新規追加 & タブ切替 -->
+      <div class="p-3 border-b border-slate-100 bg-slate-50 select-none">
+        <div class="flex justify-between items-center mb-2.5">
+          <h2 class="font-bold text-slate-700 flex items-center space-x-1.5 text-sm md:text-base">
             <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-            <span>入居者一覧</span>
+            <span id="patient-list-heading">入居者一覧</span>
           </h2>
           <button 
             onclick="openPatientModal(null)"
-            class="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-full transition flex items-center justify-center cursor-pointer"
-            style="min-width: 36px; min-height: 36px;"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-full transition flex items-center justify-center cursor-pointer shadow-sm"
+            style="min-width: 34px; min-height: 34px;"
             title="新規入居者の登録"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
           </button>
         </div>
+
+        <!-- 入居中 / 退去者BOX 切り替えタブ -->
+        <div class="flex bg-slate-200/80 p-0.5 rounded-lg mb-2 text-xs font-bold font-sans">
+          <button 
+            id="tab-patient-active"
+            type="button"
+            onclick="setPatientTab('active')"
+            class="flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 bg-white text-emerald-800 shadow-sm"
+          >
+            <span>入居中</span>
+            <span id="badge-active-count" class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+          </button>
+          <button 
+            id="tab-patient-archived"
+            type="button"
+            onclick="setPatientTab('archived')"
+            class="flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 text-slate-600 hover:text-slate-800"
+          >
+            <span>退去者BOX</span>
+            <span id="badge-archived-count" class="bg-slate-300 text-slate-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+          </button>
+        </div>
+
         <input 
           type="text" 
           id="patient-search"
           placeholder="氏名や居室番号で検索..." 
           oninput="handleSearch()"
-          class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-1 focus:ring-emerald-500 focus:outline-none bg-white font-sans text-black"
+          class="w-full px-3 py-1.5 text-xs md:text-sm border border-slate-300 rounded-lg focus:ring-1 focus:ring-emerald-500 focus:outline-none bg-white font-sans text-black"
         />
       </div>
 
@@ -903,6 +926,22 @@
           ></textarea>
         </div>
 
+        <!-- 状態（入居中/退去済み）切り替え表示エリア（編集時のみ退去・復帰ボタンを表示） -->
+        <div id="patient-status-change-area" class="hidden p-3 rounded-lg border bg-slate-50 flex items-center justify-between select-none">
+          <div>
+            <span class="text-xs font-bold text-slate-700 block">現在の在籍ステータス:</span>
+            <span id="patient-modal-status-badge" class="text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-0.5">入居中</span>
+          </div>
+          <button 
+            type="button" 
+            id="btn-toggle-discharge" 
+            onclick="handleToggleDischargeFromModal()" 
+            class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-sm"
+          >
+            <span>退去にする</span>
+          </button>
+        </div>
+
         <div class="flex justify-end space-x-2 pt-3 border-t border-slate-200 select-none">
           <button type="button" onclick="closePatientModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition font-bold cursor-pointer font-sans">キャンセル</button>
           <button type="submit" id="patient-modal-submit-btn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition shadow cursor-pointer font-sans">登録する</button>
@@ -1378,6 +1417,7 @@
       selectedPatientId: null,
       selectedRecordId: null, 
       editingPatientId: null,
+      patientTab: 'active', // 'active' (入居中) または 'archived' (退去者BOX)
       isEditing: false,
       audioInputType: 'record',
       
@@ -1463,11 +1503,18 @@
         }
         document.getElementById('gas-code-box').value = GAS_SCRIPT_CODE;
 
-        const activePatients = appState.patients.filter(p => !p.deleted);
+        const activePatients = appState.patients.filter(p => !p.deleted && !p.isArchived);
         if (activePatients.length > 0) {
           appState.selectedPatientId = activePatients[0].id;
           const records = activePatients[0].records.filter(r => !r.deleted);
           appState.selectedRecordId = records.length > 0 ? records[records.length - 1].id : null;
+        } else {
+          const anyPatients = appState.patients.filter(p => !p.deleted);
+          if (anyPatients.length > 0) {
+            appState.selectedPatientId = anyPatients[0].id;
+            const records = anyPatients[0].records.filter(r => !r.deleted);
+            appState.selectedRecordId = records.length > 0 ? records[records.length - 1].id : null;
+          }
         }
 
         // 起動時に、一時バックアップされた音声（解析失敗時の救済データ）があるか確認してパネル制御
@@ -1507,26 +1554,81 @@
       renderPatientList(appState.searchQuery);
     }
 
+    // 入居中 / 退去者BOX タブ切替
+    function setPatientTab(tab) {
+      appState.patientTab = tab;
+      
+      const tabActive = document.getElementById('tab-patient-active');
+      const tabArchived = document.getElementById('tab-patient-archived');
+      const heading = document.getElementById('patient-list-heading');
+
+      if (tab === 'archived') {
+        if (tabArchived) {
+          tabArchived.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 bg-white text-slate-800 shadow-sm font-bold';
+        }
+        if (tabActive) {
+          tabActive.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 text-slate-600 hover:text-slate-800 font-bold';
+        }
+        if (heading) heading.textContent = '退去者BOX';
+      } else {
+        if (tabActive) {
+          tabActive.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 bg-white text-emerald-800 shadow-sm font-bold';
+        }
+        if (tabArchived) {
+          tabArchived.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 text-slate-600 hover:text-slate-800 font-bold';
+        }
+        if (heading) heading.textContent = '入居者一覧';
+      }
+
+      // タブ切り替え時、表示中の利用者が現在のタブに含まれていなければ、タブ内の最初の利用者を選択
+      const currentList = appState.patients.filter(p => !p.deleted && (tab === 'archived' ? !!p.isArchived : !p.isArchived));
+      const isCurrentSelectedInList = currentList.some(p => p.id === appState.selectedPatientId);
+      if (!isCurrentSelectedInList && currentList.length > 0) {
+        selectPatient(currentList[0].id);
+      } else {
+        renderPatientList(appState.searchQuery || "");
+      }
+    }
+
     function renderPatientList(query = "") {
       const container = document.getElementById('patient-list-container');
       container.innerHTML = "";
 
+      const currentTab = appState.patientTab || 'active';
+      const isArchivedTab = (currentTab === 'archived');
+
+      // バッジ件数更新
+      const activeCount = appState.patients.filter(p => !p.deleted && !p.isArchived).length;
+      const archivedCount = appState.patients.filter(p => !p.deleted && !!p.isArchived).length;
+      const badgeActive = document.getElementById('badge-active-count');
+      const badgeArchived = document.getElementById('badge-archived-count');
+      if (badgeActive) badgeActive.textContent = activeCount;
+      if (badgeArchived) badgeArchived.textContent = archivedCount;
+
       const filtered = appState.patients.filter(p => {
         if (p.deleted) return false;
-        return p.name.includes(query) || p.kana.includes(query) || (p.roomNumber && p.roomNumber.includes(query));
+        const matchesTab = isArchivedTab ? !!p.isArchived : !p.isArchived;
+        if (!matchesTab) return false;
+        return (p.name || '').includes(query) || (p.kana || '').includes(query) || (p.roomNumber && p.roomNumber.includes(query));
       });
 
       if (filtered.length === 0) {
-        container.innerHTML = `<div class="p-4 text-center text-slate-400 text-sm font-sans">該当する入居者がいません</div>`;
+        const emptyMsg = isArchivedTab ? '退去者は登録されていません' : '該当する入居者がいません';
+        container.innerHTML = `<div class="p-4 text-center text-slate-400 text-sm font-sans">${emptyMsg}</div>`;
         return;
       }
 
       filtered.forEach(p => {
         const isSelected = appState.selectedPatientId === p.id;
-        const roomBadge = p.roomNumber ? `<span class="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-sans font-medium">${p.roomNumber}号室</span>` : '';
+        const statusBadge = p.isArchived 
+          ? `<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-sans font-bold">退去済</span>`
+          : (p.roomNumber ? `<span class="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-sans font-medium">${p.roomNumber}号室</span>` : '');
+        
         const item = document.createElement('div');
         item.className = `p-3 border-b border-slate-100 cursor-pointer transition flex justify-between items-center ${
-          isSelected ? 'bg-emerald-50 border-l-4 border-l-emerald-600 font-sans' : 'hover:bg-slate-50 font-sans'
+          isSelected 
+            ? (p.isArchived ? 'bg-slate-100 border-l-4 border-l-slate-600 font-sans' : 'bg-emerald-50 border-l-4 border-l-emerald-600 font-sans')
+            : 'hover:bg-slate-50 font-sans'
         }`;
         
         item.onclick = () => selectPatient(p.id);
@@ -1538,19 +1640,19 @@
           <div>
             <div class="flex items-center space-x-1.5">
               <span class="font-semibold text-slate-800 text-sm">${p.name} 様</span>
-              ${roomBadge}
+              ${statusBadge}
             </div>
             <div class="text-xs text-slate-400 mt-0.5">${p.kana} / ${p.gender}</div>
             <div class="text-[10px] text-slate-500 mt-0.5 font-sans">${birthStr}</div>
           </div>
           <div class="flex items-center space-x-1.5">
-            <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold font-sans">
+            <span class="text-xs ${p.isArchived ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'} px-2 py-0.5 rounded-full font-bold font-sans">
               ${p.records.filter(r => !r.deleted).length}回
             </span>
             <button 
               onclick="event.stopPropagation(); deletePatient('${p.id}')"
               class="text-slate-300 hover:text-rose-600 p-1 cursor-pointer"
-              title="削除"
+              title="完全削除"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
             </button>
@@ -1633,13 +1735,17 @@
       const birthInfo = getWarekiAndAge(p.birthDate);
       const birthDisplay = p.birthDate ? `${birthInfo.wareki} (満${birthInfo.age})` : '未登録';
 
-      document.getElementById('active-patient-title').innerHTML = `${p.name} 様 <span class="text-sm font-normal text-slate-500 font-sans">(${p.roomNumber ? `${p.roomNumber}号室` : '居室未設定'})</span>`;
-      document.getElementById('active-patient-subtitle').textContent = `生年月日: ${birthDisplay} | 性別: ${p.gender}`;
+      const roomDisplay = p.isArchived 
+        ? `<span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">退去済み</span>` 
+        : `<span class="text-sm font-normal text-slate-500 font-sans">(${p.roomNumber ? `${p.roomNumber}号室` : '居室未設定'})</span>`;
+
+      document.getElementById('active-patient-title').innerHTML = `${p.name} 様 ${roomDisplay}`;
+      document.getElementById('active-patient-subtitle').textContent = `生年月日: ${birthDisplay} | 性別: ${p.gender}${p.isArchived ? ' 【退去者BOX保管中】' : ''}`;
       document.getElementById('sheet-patient-name').textContent = `${p.name} 様`;
 
       document.getElementById('basic-info-name').innerHTML = `${p.name} 様 <span class="text-xs font-normal text-slate-400 font-sans">(${p.kana || 'フリガナなし'})</span>`;
       document.getElementById('basic-info-birth').textContent = p.birthDate ? `${birthInfo.wareki} (満${birthInfo.age})` : 'ー';
-      document.getElementById('basic-info-room').textContent = `${p.roomNumber ? `${p.roomNumber}号室` : '（未設定）'} / ${p.gender}`;
+      document.getElementById('basic-info-room').textContent = `${p.roomNumber ? `${p.roomNumber}号室` : '（未設定）'} / ${p.gender}${p.isArchived ? ' (退去済)' : ''}`;
       document.getElementById('basic-info-history').textContent = p.history || "（既往歴・アレルギーなどの特記事項はありません）";
       
       const lastUpdateText = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ja-JP') : '未同期';
@@ -3447,6 +3553,9 @@
       appState.editingPatientId = patientId;
       const modalTitle = document.getElementById('patient-modal-title');
       const submitBtn = document.getElementById('patient-modal-submit-btn');
+      const statusArea = document.getElementById('patient-status-change-area');
+      const statusBadge = document.getElementById('patient-modal-status-badge');
+      const btnToggle = document.getElementById('btn-toggle-discharge');
 
       if (patientId) {
         modalTitle.textContent = "入居者情報の修正";
@@ -3460,10 +3569,39 @@
           document.getElementById('new-pat-gender').value = p.gender || "女性";
           document.getElementById('new-pat-room').value = p.roomNumber || "";
           document.getElementById('new-pat-history').value = p.history || "";
+
+          // 退去ボタン・ステータス表示の更新
+          if (statusArea) statusArea.classList.remove('hidden');
+          if (p.isArchived) {
+            if (statusBadge) {
+              statusBadge.textContent = "退去済み (退去者BOX)";
+              statusBadge.className = "text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-0.5 bg-slate-200 text-slate-700";
+            }
+            if (btnToggle) {
+              btnToggle.innerHTML = `
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
+                <span>入居中に戻す（復帰）</span>
+              `;
+              btnToggle.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white";
+            }
+          } else {
+            if (statusBadge) {
+              statusBadge.textContent = "入居中";
+              statusBadge.className = "text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-0.5 bg-emerald-100 text-emerald-800";
+            }
+            if (btnToggle) {
+              btnToggle.innerHTML = `
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>
+                <span>退去にする</span>
+              `;
+              btnToggle.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-sm bg-amber-600 hover:bg-amber-700 text-white";
+            }
+          }
         }
       } else {
         modalTitle.textContent = "新規入居者の登録";
         submitBtn.textContent = "登録する";
+        if (statusArea) statusArea.classList.add('hidden');
         
         document.getElementById('new-pat-name').value = "";
         document.getElementById('new-pat-kana').value = "";
@@ -3475,6 +3613,56 @@
       const modal = document.getElementById('patient-modal');
       modal.classList.remove('hidden');
       modal.style.display = 'flex';
+    }
+
+    // モーダル内の「退去にする / 入居中に戻す」トグル処理
+    function handleToggleDischargeFromModal() {
+      const patientId = appState.editingPatientId;
+      if (!patientId) return;
+
+      const p = appState.patients.find(x => x.id === patientId);
+      if (!p) return;
+
+      const willArchive = !p.isArchived;
+      const confirmTitle = willArchive ? "退去処理の確認" : "入居復帰の確認";
+      const confirmMsg = willArchive 
+        ? `「${p.name}」様を【退去】にしますか？\n\n※ 過去の往診記録やお薬情報・録音データはすべて保持されたまま「退去者BOX」へ移動し、通常の入居者一覧からは非表示になります。`
+        : `「${p.name}」様を通常の【入居中】一覧へ復帰させますか？`;
+
+      showMsg(
+        confirmTitle,
+        confirmMsg,
+        "confirm",
+        async () => {
+          p.isArchived = willArchive;
+          p.updatedAt = Date.now();
+          await savePatientToDB(p);
+          
+          closePatientModal();
+          const resultMsg = willArchive
+            ? `「${p.name}」様を退去とし、退去者BOXへ移動しました。データは安全に保持されています。`
+            : `「${p.name}」様を入居中一覧へ復帰させました。`;
+          showMsg(willArchive ? "退去完了" : "復帰完了", resultMsg, "success");
+          
+          // タブを対象側へ自動切替
+          appState.patientTab = willArchive ? 'archived' : 'active';
+          const tabActive = document.getElementById('tab-patient-active');
+          const tabArchived = document.getElementById('tab-patient-archived');
+          const heading = document.getElementById('patient-list-heading');
+          if (willArchive) {
+            if (tabArchived) tabArchived.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 bg-white text-slate-800 shadow-sm font-bold';
+            if (tabActive) tabActive.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 text-slate-600 hover:text-slate-800 font-bold';
+            if (heading) heading.textContent = '退去者BOX';
+          } else {
+            if (tabActive) tabActive.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 bg-white text-emerald-800 shadow-sm font-bold';
+            if (tabArchived) tabArchived.className = 'flex-1 py-1.5 px-2 rounded-md transition flex items-center justify-center space-x-1 text-slate-600 hover:text-slate-800 font-bold';
+            if (heading) heading.textContent = '入居者一覧';
+          }
+
+          renderAll();
+          triggerSync(false);
+        }
+      );
     }
 
     function openEditPatientModal() {
