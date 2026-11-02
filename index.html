@@ -1031,14 +1031,23 @@
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-600 mb-0.5 font-sans select-none">GAS 暗号化パスワード</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 id="sync-password-input"
                 placeholder="任意設定（PC側と同じパスワード）"
                 class="w-full px-3 py-1.5 border border-indigo-200 rounded text-xs focus:outline-none bg-white text-black"
               />
             </div>
-            <button 
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-0.5 font-sans select-none">同期認証トークン（必須・GAS側のスクリプトプロパティ SYNC_TOKEN と同じ値）</label>
+              <input
+                type="password"
+                id="sync-token-input"
+                placeholder="GASのスクリプトプロパティに設定した合言葉"
+                class="w-full px-3 py-1.5 border border-indigo-200 rounded text-xs focus:outline-none bg-white text-black"
+              />
+            </div>
+            <button
               onclick="saveSyncSettings()"
               class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer font-sans select-none"
             >
@@ -1059,12 +1068,14 @@
                 <li>Googleドライブを開き、新規作成 ＞「その他」＞「Google Apps Script」を選択。</li>
                 <li>エディタ内に表示されている初期コードをすべて消去し, 以下のスクリプトを貼り付け。</li>
                 <textarea id="gas-code-box" readonly class="w-full h-24 p-1.5 mt-1 border border-slate-200 rounded bg-slate-50 font-mono text-[9px] text-black" onclick="this.select()"></textarea>
+                <li>画面左の「プロジェクトの設定」(歯車アイコン)を開き、「スクリプト プロパティ」に <b>SYNC_TOKEN</b> という名前で、他人が推測できない長い合言葉（英数字20文字以上を推奨）を値として追加・保存する。この合言葉は上記の「同期認証トークン」欄にも同じものを入力する。</li>
                 <li>画面右上「デプロイ」＞「新しいデプロイ」をクリック。</li>
                 <li>種類の選択で「ウェブアプリ」を選び, 次の設定：
                   <br>・次のユーザーとして実行: <b>自分</b>
                   <br>・アクセスできるユーザー: <b>全員</b>
                 </li>
                 <li>完了画面に表示される「ウェブアプリ URL」をコピーし、上記の入力欄に貼り付け。</li>
+                <li class="text-rose-600 font-bold">以前のデプロイ（旧URL）を使っていた場合は、「デプロイを管理」から旧デプロイを必ずアーカイブ（無効化）する。トークンを知らない人は新URLにアクセスしてもデータを取得・書き換えできません。</li>
               </ol>
             </details>
           </div>
@@ -1613,7 +1624,7 @@
     ];
 
     // GASスクリプト
-    const GAS_SCRIPT_CODE = `function doPost(e) {\n  var data = JSON.parse(e.postData.contents);\n  var action = data.action;\n  \n  function getPdfFolder() {\n    var folders = DriveApp.getFoldersByName("visit_records_sync_pdfs");\n    if (folders.hasNext()) {\n      return folders.next();\n    } else {\n      return DriveApp.createFolder("visit_records_sync_pdfs");\n    }\n  }\n  \n  var files = DriveApp.getFilesByName("visit_records_sync.txt");\n  var file;\n  if (files.hasNext()) {\n    file = files.next();\n  } else {\n    file = DriveApp.createFile("visit_records_sync.txt", "");\n  }\n  \n  if (action === "save") {\n    file.setContent(data.payload);\n    return ContentService.createTextOutput(JSON.stringify({status: "success"}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  } else if (action === "load") {\n    var content = file.getAs("text/plain").getDataAsString();\n    return ContentService.createTextOutput(JSON.stringify({status: "success", payload: content}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  } else if (action === "save_pdf") {\n    var folder = getPdfFolder();\n    var existingFiles = folder.getFilesByName(data.pdfId + ".txt");\n    while (existingFiles.hasNext()) {\n      existingFiles.next().setTrashed(true);\n    }\n    folder.createFile(data.pdfId + ".txt", data.payload);\n    return ContentService.createTextOutput(JSON.stringify({status: "success"}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  } else if (action === "load_pdf") {\n    var folder = getPdfFolder();\n    var pdfFiles = folder.getFilesByName(data.pdfId + ".txt");\n    if (pdfFiles.hasNext()) {\n      var content = pdfFiles.next().getAs("text/plain").getDataAsString();\n      return ContentService.createTextOutput(JSON.stringify({status: "success", payload: content}))\n                           .setMimeType(ContentService.MimeType.JSON);\n    } else {\n      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "PDFがありません。"}))\n                           .setMimeType(ContentService.MimeType.JSON);\n    }\n  }\n}\n\nfunction doGet(e) {\n  var files = DriveApp.getFilesByName("visit_records_sync.txt");\n  var content = "";\n  if (files.hasNext()) {\n    content = files.next().getAs("text/plain").getDataAsString();\n  }\n  return ContentService.createTextOutput(JSON.stringify({status: "success", payload: content}))\n                       .setMimeType(ContentService.MimeType.JSON);\n}`;
+    const GAS_SCRIPT_CODE = `function checkToken_(token) {\n  var required = PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN');\n  return !!required && token === required;\n}\n\nfunction doPost(e) {\n  var data = JSON.parse(e.postData.contents);\n  var action = data.action;\n\n  if (!checkToken_(data.token)) {\n    return ContentService.createTextOutput(JSON.stringify({status: "error", message: "unauthorized"}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  }\n\n  function getPdfFolder() {\n    var folders = DriveApp.getFoldersByName("visit_records_sync_pdfs");\n    if (folders.hasNext()) {\n      return folders.next();\n    } else {\n      return DriveApp.createFolder("visit_records_sync_pdfs");\n    }\n  }\n  \n  var files = DriveApp.getFilesByName("visit_records_sync.txt");\n  var file;\n  if (files.hasNext()) {\n    file = files.next();\n  } else {\n    file = DriveApp.createFile("visit_records_sync.txt", "");\n  }\n  \n  if (action === "save") {\n    file.setContent(data.payload);\n    return ContentService.createTextOutput(JSON.stringify({status: "success"}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  } else if (action === "load") {\n    var content = file.getAs("text/plain").getDataAsString();\n    return ContentService.createTextOutput(JSON.stringify({status: "success", payload: content}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  } else if (action === "save_pdf") {\n    var folder = getPdfFolder();\n    var existingFiles = folder.getFilesByName(data.pdfId + ".txt");\n    while (existingFiles.hasNext()) {\n      existingFiles.next().setTrashed(true);\n    }\n    folder.createFile(data.pdfId + ".txt", data.payload);\n    return ContentService.createTextOutput(JSON.stringify({status: "success"}))\n                         .setMimeType(ContentService.MimeType.JSON);\n  } else if (action === "load_pdf") {\n    var folder = getPdfFolder();\n    var pdfFiles = folder.getFilesByName(data.pdfId + ".txt");\n    if (pdfFiles.hasNext()) {\n      var content = pdfFiles.next().getAs("text/plain").getDataAsString();\n      return ContentService.createTextOutput(JSON.stringify({status: "success", payload: content}))\n                           .setMimeType(ContentService.MimeType.JSON);\n    } else {\n      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "PDFがありません。"}))\n                           .setMimeType(ContentService.MimeType.JSON);\n    }\n  }\n\n  return ContentService.createTextOutput(JSON.stringify({status: "error", message: "invalid action"}))\n                       .setMimeType(ContentService.MimeType.JSON);\n}\n\nfunction doGet(e) {\n  // ヘルスチェック用途のみ。認証なしでデータを返すことは絶対にしない。\n  return ContentService.createTextOutput(JSON.stringify({status: "success"}))\n                       .setMimeType(ContentService.MimeType.JSON);\n}`;
 
     const DEFAULT_MASTER_DOCTORS = [
       "鈴木 一郎 医師 (さくら訪問クリニック)",
@@ -1704,12 +1715,7 @@
           document.getElementById('api-key-input').value = userPresetKey;
         }
 
-        let savedSyncUrl = localStorage.getItem('visit_records_sync_url');
-        if (!savedSyncUrl) {
-          savedSyncUrl = "https://script.google.com/macros/s/AKfycby_fbuC6bA0migSPW7n_-z-m7FW0VdvcdpRKRdvump2aHq6i5jw3EXpPR6VNiyTVmIw/exec";
-          localStorage.setItem('visit_records_sync_url', savedSyncUrl);
-        }
-
+        const savedSyncUrl = localStorage.getItem('visit_records_sync_url');
         if (savedSyncUrl) {
           document.getElementById('sync-url-input').value = savedSyncUrl;
           document.getElementById('sync-status-badge').classList.remove('hidden');
@@ -1718,6 +1724,10 @@
         const savedSyncPass = localStorage.getItem('visit_records_sync_pass');
         if (savedSyncPass) {
           document.getElementById('sync-password-input').value = savedSyncPass;
+        }
+        const savedSyncToken = localStorage.getItem('visit_records_sync_token');
+        if (savedSyncToken) {
+          document.getElementById('sync-token-input').value = savedSyncToken;
         }
         document.getElementById('gas-code-box').value = GAS_SCRIPT_CODE;
 
@@ -2136,7 +2146,8 @@
         renderAll();
 
         const syncUrl = localStorage.getItem('visit_records_sync_url');
-        if (syncUrl) {
+        const syncToken = localStorage.getItem('visit_records_sync_token');
+        if (syncUrl && syncToken) {
           showMsg("クラウド同期中", "PDFデータをクラウドにバックアップ同期しています...", "info");
           fetch(syncUrl, {
             method: "POST",
@@ -2144,7 +2155,8 @@
             body: JSON.stringify({
               action: "save_pdf",
               pdfId: pdfId,
-              payload: payloadStr
+              payload: payloadStr,
+              token: syncToken
             })
           }).then(res => {
             if (!res.ok) throw new Error();
@@ -2199,17 +2211,18 @@
       getPDF(pdfId).then(async pdf => {
         if (!pdf) {
           const syncUrl = localStorage.getItem('visit_records_sync_url');
-          if (!syncUrl) {
+          const syncToken = localStorage.getItem('visit_records_sync_token');
+          if (!syncUrl || !syncToken) {
             showMsg("エラー", "PDFお薬情報が見つかりませんでした。", "error");
             return;
           }
-          
+
           showMsg("ダウンロード中", "クラウドからPDFお薬情報を取得しています...", "info");
           try {
             const response = await fetch(syncUrl, {
               method: "POST",
               headers: { "Content-Type": "text/plain" },
-              body: JSON.stringify({ action: "load_pdf", pdfId: pdfId })
+              body: JSON.stringify({ action: "load_pdf", pdfId: pdfId, token: syncToken })
             });
             if (!response.ok) throw new Error("CORSまたは接続障害が発生しました。");
             const result = await response.json();
@@ -3508,6 +3521,7 @@
     function saveSyncSettings() {
       const url = document.getElementById('sync-url-input').value.trim();
       const pass = document.getElementById('sync-password-input').value.trim();
+      const token = document.getElementById('sync-token-input').value.trim();
 
       if (url) {
         localStorage.setItem('visit_records_sync_url', url);
@@ -3516,12 +3530,18 @@
         } else {
           localStorage.removeItem('visit_records_sync_pass');
         }
+        if (token) {
+          localStorage.setItem('visit_records_sync_token', token);
+        } else {
+          localStorage.removeItem('visit_records_sync_token');
+        }
         document.getElementById('sync-status-badge').classList.remove('hidden');
         updateSyncStatusIndicator('configured');
         showMsg("同期設定保存", "クラウド自動同期設定を保存しました。", "success");
       } else {
         localStorage.removeItem('visit_records_sync_url');
         localStorage.removeItem('visit_records_sync_pass');
+        localStorage.removeItem('visit_records_sync_token');
         document.getElementById('sync-status-badge').classList.add('hidden');
         showMsg("同期設定解除", "自動同期設定を解除しました。", "info");
       }
@@ -3530,23 +3550,34 @@
 
     async function testSyncConnection() {
       const url = document.getElementById('sync-url-input').value.trim();
+      const token = document.getElementById('sync-token-input').value.trim();
       if (!url) {
         showMsg("エラー", "ウェブアプリのURLを入力してください。", "error");
+        return;
+      }
+      if (!token) {
+        showMsg("エラー", "同期認証トークンを入力してください（GAS側のスクリプトプロパティ SYNC_TOKEN と同じ値）。", "error");
         return;
       }
 
       showMsg("テスト中...", "Google Apps Script への接続テストを行っています...", "info");
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "load", token: token })
+        });
         if (!response.ok) throw new Error("応答ステータスエラー");
         const result = await response.json();
         if (result.status === "success") {
-          showMsg("接続成功！", "Google Drive および GAS への接続テストに成功しました！", "success");
+          showMsg("接続成功！", "Google Drive および GAS への接続・認証テストに成功しました！", "success");
+        } else if (result.message === "unauthorized") {
+          throw new Error("トークンが一致しません。GAS側のスクリプトプロパティ SYNC_TOKEN と同じ値を入力してください。");
         } else {
           throw new Error("意図しない応答形式です。");
         }
       } catch (err) {
-        showMsg("接続失敗", "接続できませんでした。CORS制限またはデプロイ設定をご確認ください。", "error");
+        showMsg("接続失敗", err.message || "接続できませんでした。CORS制限またはデプロイ設定をご確認ください。", "error");
       }
     }
 
@@ -3631,14 +3662,29 @@
         return;
       }
 
+      const syncToken = localStorage.getItem('visit_records_sync_token');
+      if (!syncToken) {
+        if (isManual) {
+          showMsg("同期設定未完了", "同期認証トークンを設定してください。", "info");
+        }
+        return;
+      }
+
       const btn = document.getElementById('btn-cloud-sync');
       if (btn) btn.classList.add('animate-pulse');
       updateSyncStatusIndicator('syncing');
 
       try {
-        const response = await fetch(syncUrl);
+        const response = await fetch(syncUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "load", token: syncToken })
+        });
         if (!response.ok) throw new Error("通信障害が発生しました。");
         const result = await response.json();
+        if (result.status !== "success" && result.message === "unauthorized") {
+          throw new Error("同期認証トークンが一致しません。設定を確認してください。");
+        }
 
         let cloudPatients = [];
         let cloudSettings = null;
@@ -3648,7 +3694,11 @@
           
           if (decryptedText) {
             const isPlainJson = decryptedText.startsWith('[') || decryptedText.startsWith('{');
-            
+
+            if (isPlainJson && pass) {
+              throw new Error("暗号化パスワードを設定しているのに、クラウド側のデータが暗号化されていません。第三者による改ざんの可能性があるため同期を中止しました。");
+            }
+
             if (!isPlainJson) {
               if (pass) {
                 try {
@@ -3743,7 +3793,7 @@
         const postResponse = await fetch(syncUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({ action: "save", payload: payloadStr })
+          body: JSON.stringify({ action: "save", payload: payloadStr, token: syncToken })
         });
 
         if (!postResponse.ok) throw new Error("クラウドデータ保存失敗");
