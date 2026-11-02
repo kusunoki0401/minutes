@@ -1390,6 +1390,14 @@
     }
 
     // --- HTMLエスケープヘルパー関数 ---
+    // ローカル（端末）日付でYYYY-MM-DDを得る。toISOString()はUTC基準になり、日本時間0:00〜8:59台に前日の日付になってしまうため使わない
+    function todayLocalStr(d = new Date()) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
     function escapeHtml(str) {
       if (str === undefined || str === null) return '';
       return String(str)
@@ -1991,7 +1999,6 @@
         viewActions.classList.add('hidden');
         editActions.classList.remove('hidden');
         aiAssistant.classList.remove('hidden');
-        resetDirectRecording();
       } else {
         viewActions.classList.remove('hidden');
         editActions.classList.add('hidden');
@@ -2149,13 +2156,15 @@
         const syncToken = localStorage.getItem('visit_records_sync_token');
         if (syncUrl && syncToken) {
           showMsg("クラウド同期中", "PDFデータをクラウドにバックアップ同期しています...", "info");
+          const syncPass = localStorage.getItem('visit_records_sync_pass');
+          const uploadPayload = syncPass ? encryptWithPassword(payloadStr, syncPass) : payloadStr;
           fetch(syncUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({
               action: "save_pdf",
               pdfId: pdfId,
-              payload: payloadStr,
+              payload: uploadPayload,
               token: syncToken
             })
           }).then(res => {
@@ -2227,11 +2236,21 @@
             if (!response.ok) throw new Error("CORSまたは接続障害が発生しました。");
             const result = await response.json();
             if (result.status === "success" && result.payload) {
+              let pdfData = result.payload;
+              if (!pdfData.startsWith("data:")) {
+                const syncPass = localStorage.getItem('visit_records_sync_pass');
+                if (!syncPass) throw new Error("このPDFは暗号化されています。同期パスワードを設定してください。");
+                try {
+                  pdfData = decryptWithPassword(pdfData, syncPass);
+                } catch (e) {
+                  throw new Error("同期パスワードが一致せず、PDFを復号できませんでした。");
+                }
+              }
               const p = appState.patients.find(x => x.pdfId === pdfId);
               const pdfName = p ? `${p.name}_薬情.pdf` : "お薬情報.pdf";
-              await savePDF(pdfId, pdfName, result.payload);
-              
-              pdf = { id: pdfId, name: pdfName, data: result.payload };
+              await savePDF(pdfId, pdfName, pdfData);
+
+              pdf = { id: pdfId, name: pdfName, data: pdfData };
               showMsg("同期成功", "クラウドからPDFデータを取得・保存しました。", "success");
               renderAll();
             } else {
@@ -2245,7 +2264,11 @@
         }
         try {
           const response = await fetch(pdf.data);
-          const blob = await response.blob();
+          let blob = await response.blob();
+          if (blob.type !== 'application/pdf') {
+            // 想定外のMIMEタイプ（改ざん・破損データ）はPDFとして強制して扱い、スクリプト実行を防ぐ
+            blob = new Blob([blob], { type: 'application/pdf' });
+          }
           const blobUrl = URL.createObjectURL(blob);
           
           const modalId = 'pdf-viewer-overlay';
@@ -2522,8 +2545,8 @@
       const sortedRecords = [...p.records].sort((a, b) => new Date(a.meetingDate) - new Date(b.meetingDate));
       const lastRecord = sortedRecords[sortedRecords.length - 1];
       appState.tempFormData = {
-        createdDate: new Date().toISOString().split('T')[0],
-        meetingDate: new Date().toISOString().split('T')[0],
+        createdDate: todayLocalStr(),
+        meetingDate: todayLocalStr(),
         meetingTime: "",
         location: lastRecord ? lastRecord.location : "施設ご本人様居室",
         doctor: lastRecord ? lastRecord.doctor : (appState.masterDoctors[0] || ""),
@@ -2546,13 +2569,14 @@
 
       appState.selectedRecordId = null;
       appState.isEditing = true;
+      resetDirectRecording();
       renderAll();
     }
 
     function enterEditMode() {
       const p = appState.patients.find(x => x.id === appState.selectedPatientId);
       if (!p) return;
-      
+
       const record = p.records.find(r => String(r.id) === String(appState.selectedRecordId));
       if (!record) {
         showMsg("エラー", "対象の往診記録が見つかりません。", "error");
@@ -2561,6 +2585,7 @@
 
       appState.tempFormData = { ...record };
       appState.isEditing = true;
+      resetDirectRecording();
       renderAll();
     }
 
@@ -2587,7 +2612,7 @@
           const mimeType = appState.recordedBlob.type || 'audio/mp4';
           const base64 = await fileToBase64(appState.recordedBlob);
           const customAudioId = "audio-" + nowTimestamp;
-          const formattedDate = appState.tempFormData.meetingDate || new Date().toISOString().split('T')[0];
+          const formattedDate = appState.tempFormData.meetingDate || todayLocalStr();
           const audioName = `${p.name}_往診録音_${formattedDate}.mp4`;
           
           // 永続化保存
@@ -2621,10 +2646,13 @@
       savePatientToDB(p).then(() => {
         appState.isEditing = false;
         appState.recordedBlob = null;
-        checkTempBackupAudio(); 
+        checkTempBackupAudio();
         showMsg("保存完了", "往診カンファレンス記録と紐付く音声データを保存しました。", "success");
         renderAll();
         triggerSync(false);
+      }).catch(err => {
+        console.error("カルテの保存に失敗:", err);
+        showMsg("保存失敗", "カルテの保存中にエラーが発生しました。もう一度お試しください: " + err.message, "error");
       });
     }
 
@@ -2818,9 +2846,15 @@
       showMsg("破棄完了", "録音を消去しました。", "info");
     }
 
-    function resetDirectRecording() {
+    function resetDirectRecording(preserveBlob = false) {
+      // 録音中に画面再描画（バックグラウンド同期完了など）が走っても、録音中のデータを消してしまわないようにする
+      if (appState.mediaRecorder && appState.mediaRecorder.state === 'recording') {
+        return;
+      }
       appState.audioChunks = [];
-      appState.recordedBlob = null;
+      if (!preserveBlob) {
+        appState.recordedBlob = null;
+      }
       clearInterval(appState.recordingTimer);
       appState.recordingSeconds = 0;
       document.getElementById('rec-time-display').textContent = "00:00";
@@ -2856,7 +2890,7 @@
       const fileUrl = URL.createObjectURL(appState.recordedBlob);
       const dlLink = document.createElement('a');
       dlLink.href = fileUrl;
-      dlLink.download = `${patName}_往診会話録音_バックアップ_${new Date().toISOString().split('T')[0]}.mp4`;
+      dlLink.download = `${patName}_往診会話録音_バックアップ_${todayLocalStr()}.mp4`;
       document.body.appendChild(dlLink);
       dlLink.click();
       setTimeout(() => {
@@ -3123,7 +3157,7 @@
             appState.tempFormData.meetingDate = meetingDate;
             renderField('meetingDate', meetingDate, 'date');
           } else if (!appState.tempFormData.meetingDate) {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = todayLocalStr();
             appState.tempFormData.meetingDate = todayStr;
             renderField('meetingDate', todayStr, 'date');
           }
@@ -3284,6 +3318,11 @@
           （例: ❌「紅斑・発赤部位の視診」 → ⭕「皮膚の赤み（発赤）がある部位の確認」）
           （例: ❌「徐脈傾向」 → ⭕「脈拍が通常より遅くなる傾向（徐脈）」）
 
+        【重要：数値・事実の捏造禁止ルール（絶対厳守）】
+        - 録音・テキスト中で明示的に言及されていない数値（血圧・体温・脈拍・SpO2・体重など）は、絶対に推測や一般的な値で埋めないでください。
+        - 言及がない項目は、必ず空文字列 "" を返してください。もっともらしい数値を創作することは、実際に測定していない数値がご家族への報告書に記載される重大な事故につながります。
+        - 同様に、医師が発言していない指示や決定事項を推測で作成しないでください。会話に基づく内容のみを記述してください。
+
         【様式に当てはめるべき項目とJSONキー】：
         - vital_bp_systolic (血圧の最高値。数値のみ。例: 120)
         - vital_bp_diastolic (血圧の最低値。数値のみ。例: 80)
@@ -3302,9 +3341,15 @@
         必ず有効なJSONオブジェクトのみを返却してください。余計な説明や前置き、マークダウンのコードブロック( \`\`\`json ... \`\`\` )は一切不要です。
         `;
 
+        // Gemini APIへインライン送信できるデータ量には上限があり、base64化で約1.33倍に膨らむため、生データの段階で保守的に制限する
+        const GEMINI_INLINE_LIMIT_BYTES = 14 * 1024 * 1024;
+
         if (appState.audioInputType === 'record') {
           if (!appState.recordedBlob || appState.recordedBlob.size === 0) {
-            throw new Error("マイク録音を完了させてから、または有効な音声を取得してから実行してください。");
+            throw new Error("マイク録音を完了させてから、または有効な音声を取得してください。");
+          }
+          if (appState.recordedBlob.size > GEMINI_INLINE_LIMIT_BYTES) {
+            throw new Error(`録音データが大きすぎます（${(appState.recordedBlob.size / 1024 / 1024).toFixed(1)}MB）。AIへの送信は1回あたり約14MBまでです。往診を分けて録音するか、文字起こしテキストの入力をご利用ください。`);
           }
           progressText.textContent = "音声データを送信フォーマットに変換中...";
           const base64Data = await fileToBase64(appState.recordedBlob);
@@ -3322,8 +3367,8 @@
           
           let totalSizeBytes = 0;
           files.forEach(f => totalSizeBytes += f.size);
-          if (totalSizeBytes > 25 * 1024 * 1024) {
-            throw new Error("選択した音声ファイルの合計サイズが大きすぎます（上限25MB）。より短く圧縮するか、件数を減らしてください。");
+          if (totalSizeBytes > GEMINI_INLINE_LIMIT_BYTES) {
+            throw new Error(`選択した音声ファイルの合計サイズが大きすぎます（${(totalSizeBytes / 1024 / 1024).toFixed(1)}MB）。AIへの送信は合計約14MBまでです。より短く圧縮するか、件数を減らしてください。`);
           }
 
           progressText.textContent = `音声ファイル (${files.length}件) を読み込み中...`;
@@ -3387,7 +3432,7 @@
           systemInstruction: { parts: [{ text: systemInstruction }] }
         };
 
-        // 指数バックオフによる再試行 (エラー対策)
+        // 指数バックオフによる再試行（ネットワーク断・429・5xxのみ。400/403等は再試行しても無駄なので即終了）
         let response;
         let delay = 1000;
         for (let i = 0; i < 5; i++) {
@@ -3397,10 +3442,15 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
-            if (response.ok) break;
-          } catch (e) {
-            if (i === 4) throw e;
+          } catch (networkErr) {
+            if (i === 4) throw networkErr;
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 2;
+            continue;
           }
+          if (response.ok) break;
+          const retryable = response.status === 429 || response.status >= 500;
+          if (!retryable || i === 4) break;
           await new Promise(r => setTimeout(r, delay));
           delay *= 2;
         }
@@ -3508,13 +3558,43 @@
       };
 
       discardSuggested();
-      resetDirectRecording();
+      resetDirectRecording(appState.audioInputType === 'record');
       appState.audioFile = null;
       clearAllAudioFiles();
       document.getElementById('transcript-input').value = "";
 
       showMsg("自動反映完了", "AI要約結果を様式フォームに入力しました。内容をご確認の上、保存してください。", "success");
       renderAll();
+    }
+
+    // --- 同期データの暗号化（PBKDF2鍵導出 + AES-CBC。旧パスフレーズ方式との復号互換あり） ---
+    function encryptWithPassword(plainText, pass) {
+      const salt = CryptoJS.lib.WordArray.random(128 / 8);
+      const iv = CryptoJS.lib.WordArray.random(128 / 8);
+      const key = CryptoJS.PBKDF2(pass, salt, { keySize: 256 / 32, iterations: 100000, hasher: CryptoJS.algo.SHA256 });
+      const encrypted = CryptoJS.AES.encrypt(plainText, key, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
+      return "v2:" + salt.toString() + ":" + iv.toString() + ":" + encrypted.ciphertext.toString(CryptoJS.enc.Base64);
+    }
+
+    function decryptWithPassword(payload, pass) {
+      if (payload.startsWith("v2:")) {
+        const parts = payload.split(":");
+        if (parts.length !== 4) throw new Error("不正な暗号化フォーマットです。");
+        const salt = CryptoJS.enc.Hex.parse(parts[1]);
+        const iv = CryptoJS.enc.Hex.parse(parts[2]);
+        const ciphertext = CryptoJS.enc.Base64.parse(parts[3]);
+        const key = CryptoJS.PBKDF2(pass, salt, { keySize: 256 / 32, iterations: 100000, hasher: CryptoJS.algo.SHA256 });
+        const decrypted = CryptoJS.AES.decrypt({ ciphertext: ciphertext }, key, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
+        const text = decrypted.toString(CryptoJS.enc.Utf8);
+        if (!text) throw new Error("復号に失敗しました。");
+        return text;
+      } else {
+        // 旧形式（単純パスフレーズ方式）との後方互換。復号に成功したら次回保存時に新形式へ自動移行される。
+        const bytes = CryptoJS.AES.decrypt(payload, pass);
+        const text = bytes.toString(CryptoJS.enc.Utf8);
+        if (!text) throw new Error("復号に失敗しました。");
+        return text;
+      }
     }
 
     // --- クラウド自動同期・双方向マージ ---
@@ -3584,7 +3664,11 @@
     function updateSyncStatusIndicator(state) {
       const dot = document.getElementById('sync-dot');
       const text = document.getElementById('sync-status-text');
-      if (state === 'configured') {
+      const failed = localStorage.getItem('visit_records_sync_failed') === "1";
+      if (state === 'configured' && failed) {
+        dot.className = "inline-block w-2 h-2 rounded-full bg-rose-500";
+        text.textContent = "⚠ 同期失敗（未反映あり）";
+      } else if (state === 'configured') {
         dot.className = "inline-block w-2 h-2 rounded-full bg-amber-400";
         text.textContent = "自動同期ON";
       } else if (state === 'syncing') {
@@ -3593,6 +3677,12 @@
       } else if (state === 'success') {
         dot.className = "inline-block w-2 h-2 rounded-full bg-emerald-500";
         text.textContent = "自動同期完了";
+      } else if (state === 'failed') {
+        dot.className = "inline-block w-2 h-2 rounded-full bg-rose-500 animate-pulse";
+        text.textContent = "⚠ 同期失敗（未反映あり）";
+      } else if (failed) {
+        dot.className = "inline-block w-2 h-2 rounded-full bg-rose-500";
+        text.textContent = "⚠ 同期失敗（未反映あり）";
       } else {
         dot.className = "inline-block w-2 h-2 rounded-full bg-slate-400";
         text.textContent = "未同期";
@@ -3653,6 +3743,11 @@
       triggerSync(true);
     }
 
+    // 同期の排他制御：実行中に呼ばれた分は完了後にもう1回だけまとめて実行する
+    let syncInFlight = false;
+    let syncQueuedManual = false;
+    let syncQueued = false;
+
     async function triggerSync(isManual = false) {
       const syncUrl = localStorage.getItem('visit_records_sync_url');
       if (!syncUrl) {
@@ -3669,6 +3764,13 @@
         }
         return;
       }
+
+      if (syncInFlight) {
+        syncQueued = true;
+        syncQueuedManual = syncQueuedManual || isManual;
+        return;
+      }
+      syncInFlight = true;
 
       const btn = document.getElementById('btn-cloud-sync');
       if (btn) btn.classList.add('animate-pulse');
@@ -3702,9 +3804,7 @@
             if (!isPlainJson) {
               if (pass) {
                 try {
-                  const bytes = CryptoJS.AES.decrypt(decryptedText, pass);
-                  decryptedText = bytes.toString(CryptoJS.enc.Utf8);
-                  if (!decryptedText) throw new Error();
+                  decryptedText = decryptWithPassword(decryptedText, pass);
                 } catch (e) {
                   throw new Error("同期パスワードが一致しません。");
                 }
@@ -3751,10 +3851,9 @@
           maxSettingsUpdatedAt = cloudUpdatedAt;
         }
 
-        // Gemini APIキーの空データによる誤消去保護
-        const defaultPresetKey = "";
-        if (!mergedApiKey || mergedApiKey === "") {
-          mergedApiKey = defaultPresetKey;
+        // Gemini APIキーの空データによる誤消去保護：マージ結果が空なら、既存のローカル値を優先して保持する
+        if (!mergedApiKey) {
+          mergedApiKey = localStorage.getItem('gemini_api_key') || "";
         }
 
         // 同期完了のたびに "Date.now()" でタイムスタンプを上書き更新しない！
@@ -3787,7 +3886,7 @@
         let payloadStr = JSON.stringify(syncPayload);
         const pass = localStorage.getItem('visit_records_sync_pass');
         if (pass) {
-          payloadStr = CryptoJS.AES.encrypt(payloadStr, pass).toString();
+          payloadStr = encryptWithPassword(payloadStr, pass);
         }
 
         const postResponse = await fetch(syncUrl, {
@@ -3798,8 +3897,11 @@
 
         if (!postResponse.ok) throw new Error("クラウドデータ保存失敗");
 
-        appState.patients = mergedPatients;
-        
+        // 同期中に別の保存が走っていた場合に備え、確定済みのDB内容を読み直す（マージ時点のスナップショットで上書きしない）
+        appState.patients = await getAllPatientsFromDB();
+        localStorage.setItem('visit_records_last_sync_success', Date.now().toString());
+        localStorage.removeItem('visit_records_sync_failed');
+
         const pStillExists = appState.patients.find(x => x.id === appState.selectedPatientId && !x.deleted);
         const activePatients = appState.patients.filter(x => !x.deleted);
         if (!pStillExists && activePatients.length > 0) {
@@ -3832,14 +3934,29 @@
 
       } catch (err) {
         console.error(err);
-        updateSyncStatusIndicator('configured');
+        localStorage.setItem('visit_records_sync_failed', "1");
+        updateSyncStatusIndicator('failed');
         if (isManual) {
           showMsg("同期エラー", "同期中にエラーが発生しました。" + err.message, "error");
         }
       } finally {
         if (btn) btn.classList.remove('animate-pulse');
+        syncInFlight = false;
+        if (syncQueued) {
+          const queuedManual = syncQueuedManual;
+          syncQueued = false;
+          syncQueuedManual = false;
+          triggerSync(queuedManual);
+        }
       }
     }
+
+    // オンライン復帰時に、同期失敗が残っていれば自動的に再試行する
+    window.addEventListener('online', () => {
+      if (localStorage.getItem('visit_records_sync_failed') === "1") {
+        triggerSync(false);
+      }
+    });
 
     // --- 入居者情報登録・修正モーダル制御 ---
     function openPatientModal(patientId = null) {
@@ -4103,13 +4220,16 @@
 
         const exportData = { patients, pdfs: allPdfs, audios: allAudios };
 
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+        // 録音入りだと数十〜数百MBになりうるため、data URI（文字列連結）ではなくBlobで扱う（iPad Safariでのメモリ不足対策）
+        const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+        const blobUrl = URL.createObjectURL(blob);
         const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `往診カンファ記録バックアップ_${new Date().toISOString().split('T')[0]}.json`);
+        downloadAnchor.setAttribute("href", blobUrl);
+        downloadAnchor.setAttribute("download", `往診カンファ記録バックアップ_${todayLocalStr()}.json`);
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
         showMsg("バックアップ成功", "録音音声を含むすべてのバックアップデータをPC/iPadに保存しました。", "success");
       } catch (err) {
         showMsg("エラー", "バックアップ出力に失敗しました: " + err.message, "error");
@@ -4139,46 +4259,38 @@
             return;
           }
 
+          // 不正なファイルで描画時に落ちないよう、最低限の形式を事前検証する
+          const isValidPatient = p => p && typeof p === 'object' && typeof p.id !== 'undefined' && Array.isArray(p.records);
+          if (!patients.every(isValidPatient)) {
+            showMsg("インポート失敗", "入居者データの形式が不正です（recordsが配列でない等）。ファイルを確認してください。", "error");
+            return;
+          }
+
           showMsg(
             "データの復元",
-            "本当にデータを復元しますか？現在保存されている全履歴、お薬PDF、録音データはすべて上書きされます。",
+            "本当にデータを復元しますか？現在保存されている全履歴、お薬PDF、録音データはすべて上書きされます。クラウド同期が有効な場合、復元後にクラウド側の内容を上書きします。",
             "confirm",
             async () => {
               try {
-                // 既存全クリア
-                const txDelP = db.transaction('patients', 'readwrite');
-                txDelP.objectStore('patients').clear();
-                await new Promise(r => txDelP.oncomplete = r);
+                // 3ストアのクリア＋挿入を1トランザクションにまとめ、途中失敗時にデータが消えたままにならないようにする
+                await new Promise((resolve, reject) => {
+                  const tx = db.transaction(['patients', 'pdfs', 'audios'], 'readwrite');
+                  tx.oncomplete = () => resolve();
+                  tx.onerror = () => reject(tx.error || new Error("トランザクションに失敗しました。"));
+                  tx.onabort = () => reject(tx.error || new Error("トランザクションが中断されました。"));
 
-                const txDelPdf = db.transaction('pdfs', 'readwrite');
-                txDelPdf.objectStore('pdfs').clear();
-                await new Promise(r => txDelPdf.oncomplete = r);
+                  const storeP = tx.objectStore('patients');
+                  storeP.clear();
+                  patients.forEach(p => storeP.put(p));
 
-                const txDelAudio = db.transaction('audios', 'readwrite');
-                txDelAudio.objectStore('audios').clear();
-                await new Promise(r => txDelAudio.oncomplete = r);
+                  const storePdf = tx.objectStore('pdfs');
+                  storePdf.clear();
+                  pdfs.forEach(pdf => storePdf.put(pdf));
 
-                // インポートインサート
-                const txP = db.transaction('patients', 'readwrite');
-                const storeP = txP.objectStore('patients');
-                for (const p of patients) {
-                  storeP.put(p);
-                }
-                await new Promise(r => txP.oncomplete = r);
-
-                const txPdf = db.transaction('pdfs', 'readwrite');
-                const storePdf = txPdf.objectStore('pdfs');
-                for (const pdf of pdfs) {
-                  storePdf.put(pdf);
-                }
-                await new Promise(r => txPdf.oncomplete = r);
-
-                const txAudio = db.transaction('audios', 'readwrite');
-                const storeAudio = txAudio.objectStore('audios');
-                for (const audio of audios) {
-                  storeAudio.put(audio);
-                }
-                await new Promise(r => txAudio.oncomplete = r);
+                  const storeAudio = tx.objectStore('audios');
+                  storeAudio.clear();
+                  audios.forEach(audio => storeAudio.put(audio));
+                });
 
                 appState.patients = patients;
                 const activePatients = patients.filter(p => !p.deleted);
@@ -4304,7 +4416,7 @@
       const meetingDate = dateEl ? dateEl.textContent.trim() : '';
 
       const safeName = patientName || '訪問診療記録';
-      const safeDate = meetingDate || new Date().toISOString().split('T')[0];
+      const safeDate = meetingDate || todayLocalStr();
       const monthInfo = getRecordMonthInfo(safeDate);
       const monthLabel = monthInfo.label ? `_${monthInfo.label}` : '';
       const filename = `訪問診療記録_${safeName}${monthLabel}_${safeDate}.pdf`;
@@ -4691,6 +4803,7 @@
 
         const normTarget = normalizeName(rawName);
         let matchedPatient = null;
+        let isPartialMatch = false;
 
         if (normTarget) {
           // 氏名またはカナの完全一致
@@ -4700,12 +4813,13 @@
             return pNorm === normTarget || (pKana && pKana === normTarget);
           });
 
-          // 部分一致（姓名結合など）
+          // 部分一致（姓名結合など）。同姓の入居者等で誤照合する可能性があるため、要確認扱いとする
           if (!matchedPatient) {
             matchedPatient = allPatients.find(p => {
               const pNorm = normalizeName(p.name);
               return pNorm.length >= 2 && (normTarget.includes(pNorm) || pNorm.includes(normTarget));
             });
+            if (matchedPatient) isPartialMatch = true;
           }
         }
 
@@ -4730,11 +4844,13 @@
           rawRoom: rawRoom,
           weight: cleanWeight,
           patient: matchedPatient,
+          isPartialMatch: isPartialMatch,
           targetRecord: targetMonthRecord,
           isExistingTargetMonth: isExistingTargetMonth,
           isCurrentEditing: isCurrent && appState.isEditing,
           status: matchedPatient ? (cleanWeight ? 'ok' : 'noweight') : 'unmatched',
-          selected: (matchedPatient && cleanWeight) ? true : false
+          // 部分一致（同姓など誤照合の可能性）は、誤爆防止のため既定でチェックを外し、職員の目視確認を必須にする
+          selected: (matchedPatient && cleanWeight && !isPartialMatch) ? true : false
         });
       }
 
@@ -4892,6 +5008,9 @@
         if (it.isCurrentEditing) {
           patientDisplay += `<span class="ml-1 inline-block text-[10px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-bold">現在編集中のカルテ</span>`;
         }
+        if (it.isPartialMatch) {
+          patientDisplay += `<div class="text-[10px] text-rose-700 font-bold">⚠ 部分一致（要確認・同姓等の誤照合に注意）</div>`;
+        }
 
         // 対象月カルテの現在値表示
         let targetWeightDisplay = 'ー';
@@ -5021,7 +5140,7 @@
         } else {
           // 該当月のカルテがまだない場合はその年月度のカルテを新規自動生成
           const defaultMeetingDate = `${gWeightCsvTargetMonth}-01`;
-          const todayStr = new Date().toISOString().split('T')[0];
+          const todayStr = todayLocalStr();
           
           // 前月体重の自動参照（直前のカルテから探す）
           let prevWeight = "";
