@@ -3136,6 +3136,16 @@
         if (parsedMeta && parsedMeta.timeStart) {
           if (parsedMeta.date) {
             meetingDate = parsedMeta.date;
+          } else {
+            // ファイル名に日付がなければ、ファイルの更新日時の日付を使う（取り込み日=今日にならないように）
+            let lm = firstFile.lastModified || 0;
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+              lm += new Date().getTimezoneOffset() * 60 * 1000;
+            }
+            const d = new Date(lm);
+            if (d.getFullYear() >= 2020) {
+              meetingDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
           }
           // 開始時間から一律15分後を終了時間として計算
           const [startHH, startMM] = parsedMeta.timeStart.split(':').map(Number);
@@ -3178,6 +3188,12 @@
             const todayStr = todayLocalStr();
             appState.tempFormData.meetingDate = todayStr;
             renderField('meetingDate', todayStr, 'date');
+          }
+
+          // 議事録作成日は開催日と同じ日付にする
+          if (appState.tempFormData.meetingDate) {
+            appState.tempFormData.createdDate = appState.tempFormData.meetingDate;
+            renderField('createdDate', appState.tempFormData.createdDate, 'date');
           }
 
           if (meetingTime) {
