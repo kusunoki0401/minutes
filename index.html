@@ -4502,7 +4502,7 @@
       const filename = `訪問診療記録_${safeName}${monthLabel}_${safeDate}.pdf`;
 
       if (window.html2pdf) {
-        showMsg("PDFを作成中", "PDFを作成して保存しています...", "info");
+        // 注意: 保存ダイアログの前にモーダル(showMsg)を出すと、Chromeが保存ダイアログを即AbortErrorで中止する
         const opt = {
           margin: [6, 6, 6, 6],
           filename: filename,
