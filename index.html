@@ -4527,7 +4527,8 @@
             } catch (pickerErr) {
               console.error('showSaveFilePicker failed:', pickerErr);
               if (pickerErr.name === 'AbortError') {
-                showMsg('キャンセル', 'PDFの保存をキャンセルしました。(' + (pickerErr.message || '') + ')', 'info');
+                // 保存を押しても同じエラーになる環境があるため、通常のダウンロードで保存できる選択肢を出す
+                if (confirm('保存先への保存ができませんでした。\nダウンロードフォルダへ通常のダウンロードで保存しますか？')) { await pdfWorker.save(); }
                 return;
               }
               handle = null; // その他の例外は通常のダウンロード保存へ
