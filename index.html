@@ -4515,7 +4515,33 @@
         try {
           const pdfWorker = html2pdf().set(opt).from(element);
 
-          // 保存ダイアログAPI(showSaveFilePicker)は環境により保存できずキャンセル扱いになるため使わず、通常のダウンロード保存にする
+          // 保存先を毎回選べるよう、保存ダイアログを先に開く（クリック直後でないと開けないため、PDF作成より前）。前回のフォルダはidで記憶される
+          if ('showSaveFilePicker' in window) {
+            let handle;
+            try {
+              handle = await window.showSaveFilePicker({
+                id: 'visit_record_pdf_save_dir',
+                suggestedName: filename,
+                types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
+              });
+            } catch (pickerErr) {
+              console.error('showSaveFilePicker failed:', pickerErr);
+              if (pickerErr.name === 'AbortError') {
+                showMsg('キャンセル', 'PDFの保存をキャンセルしました。(' + (pickerErr.message || '') + ')', 'info');
+                return;
+              }
+              handle = null; // その他の例外は通常のダウンロード保存へ
+            }
+            if (handle) {
+              const blob = await pdfWorker.output('blob');
+              const writable = await handle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+              showMsg('完了', '指定された場所へPDFファイルを保存しました。', 'success');
+              return;
+            }
+          }
+
           await pdfWorker.save();
         } catch (err) {
           console.error("html2pdf failed, fallback to print:", err);
