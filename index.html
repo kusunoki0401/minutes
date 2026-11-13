@@ -206,7 +206,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12h3.12 1.355 2.197m0 0L10.5 6l4.25 12 2.197-6.118H21.75" />
       </svg>
       <div>
-        <h1 class="text-xl font-bold tracking-wider">施設往診ケア管理システム</h1>
+        <h1 class="text-xl font-bold tracking-wider">施設往診ケア管理システム <span class="text-[10px] font-normal tracking-normal bg-white/20 rounded px-1.5 py-0.5 align-middle" title="更新するたびに番号を上げる">v2026.11.13-1</span></h1>
         <p class="text-xs text-emerald-100">訪問診療記録 ＆ 個別カンファレンス議事録自動生成（薬情PDF・iPad直接録音対応）</p>
       </div>
     </div>
@@ -4513,7 +4513,8 @@
         };
 
         try {
-          const pdfWorker = html2pdf().set(opt).from(element);
+          // 注意: html2pdfの準備も保存ダイアログより後にする（先に始めるとChromeが保存ダイアログを即AbortErrorで中止する）
+          const makeWorker = () => html2pdf().set(opt).from(element);
 
           // 保存先を毎回選べるよう、保存ダイアログを先に開く（クリック直後でないと開けないため、PDF作成より前）。前回のフォルダはidで記憶される
           if ('showSaveFilePicker' in window) {
@@ -4528,13 +4529,13 @@
               console.error('showSaveFilePicker failed:', pickerErr);
               if (pickerErr.name === 'AbortError') {
                 // 保存を押しても同じエラーになる環境があるため、通常のダウンロードで保存できる選択肢を出す
-                if (confirm('保存先への保存ができませんでした。\nダウンロードフォルダへ通常のダウンロードで保存しますか？')) { await pdfWorker.save(); }
+                if (confirm('保存先への保存ができませんでした。\nダウンロードフォルダへ通常のダウンロードで保存しますか？')) { await makeWorker().save(); }
                 return;
               }
               handle = null; // その他の例外は通常のダウンロード保存へ
             }
             if (handle) {
-              const blob = await pdfWorker.output('blob');
+              const blob = await makeWorker().output('blob');
               const writable = await handle.createWritable();
               await writable.write(blob);
               await writable.close();
@@ -4543,7 +4544,7 @@
             }
           }
 
-          await pdfWorker.save();
+          await makeWorker().save();
         } catch (err) {
           console.error("html2pdf failed, fallback to print:", err);
           window.print();
