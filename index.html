@@ -4502,7 +4502,7 @@
       const filename = `訪問診療記録_${safeName}${monthLabel}_${safeDate}.pdf`;
 
       if (window.html2pdf) {
-        showMsg("PDFを作成中", "保存ダイアログの準備を行っています...", "info");
+        showMsg("PDFを作成中", "PDFを作成して保存しています...", "info");
         const opt = {
           margin: [6, 6, 6, 6],
           filename: filename,
@@ -4515,35 +4515,7 @@
         try {
           const pdfWorker = html2pdf().set(opt).from(element);
 
-          // PC (Chrome / Edge 等) で「名前を付けて保存」ダイアログを自動ポップアップ表示（前回フォルダを自動記憶）
-          if ('showSaveFilePicker' in window) {
-            try {
-              const handle = await window.showSaveFilePicker({
-                id: 'visit_record_pdf_save_dir', // ← このIDによりブラウザが前回最後に指定した保存フォルダを自動記憶
-                startIn: 'documents',
-                suggestedName: filename,
-                types: [{
-                  description: 'PDF Document',
-                  accept: { 'application/pdf': ['.pdf'] }
-                }]
-              });
-              showMsg("PDFを作成中", "保存しています...", "info");
-              const blob = await pdfWorker.output('blob');
-              const writable = await handle.createWritable();
-              await writable.write(blob);
-              await writable.close();
-              showMsg("完了", "指定された場所へPDFファイルを保存しました。", "success");
-              return;
-            } catch (pickerErr) {
-              if (pickerErr.name === 'AbortError') {
-                showMsg("キャンセル", "PDFの保存をキャンセルしました。", "info");
-                return;
-              }
-              // API例外時は通常の自動保存へフォールバック
-            }
-          }
-
-          // iPad Safari 等の showSaveFilePicker 非対応環境用フォールバック
+          // 保存ダイアログAPI(showSaveFilePicker)は環境により保存できずキャンセル扱いになるため使わず、通常のダウンロード保存にする
           await pdfWorker.save();
         } catch (err) {
           console.error("html2pdf failed, fallback to print:", err);
